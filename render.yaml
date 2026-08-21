@@ -1,0 +1,28 @@
+# Render blueprint for Hackathon Studio.
+#
+# Deploying: create a Blueprint from this repo, then set DATABASE_URL in the
+# Render dashboard to the TiDB Cloud connection string. Everything else is
+# either generated or has a working default.
+
+services:
+  - type: web
+    name: hackathon-studio
+    runtime: node
+    plan: free
+    region: singapore # closest Render region to Bangkok
+    branch: main
+    healthCheckPath: /api/health
+    buildCommand: npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false # set this by hand — it is the TiDB Cloud string, never committed
+      - key: AUTH_SECRET
+        # Render generates this once and keeps it across deploys. Sessions do
+        # not depend on it, so even a rotation would not sign anybody out.
+        generateValue: true
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production

@@ -1,0 +1,119 @@
+import "server-only";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
+import { db } from "@/lib/db";
+import { SESSION_COOKIE, SESSION_TTL_DAYS } from "@/lib/constants";
+import type { Viewer } from "@/lib/policy";
+
+export type { Viewer };
+
+/**
+ * Sessions are opaque bearer tokens, not signed payloads.
+ *
+ * The browser holds 32 random bytes; the database holds their SHA-256 hash.
+ * Validating a request is a hash + index lookup — no application secret is
+ * involved anywhere in the path. That is deliberate: it means a redeploy, a
+ * new AUTH_SECRET, or a fresh Render instance cannot invalidate a login. The
+ * only things that end a session are expiry, an explicit sign-out, and a T4
+ * revoking it from the admin panel.
+ */
+export function generateToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/** Constant-time compare for codes that arrive from a URL. */
+export function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
+function expiryFromNow(): Date {
+  return new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+}
+
+export async function createSession(
+  userId: string,
+  meta: { userAgent?: string | null; ip?: string | null } = {},
+): Promise<void> {
+  const token = generateToken();
+  const expiresAt = expiryFromNow();
+
+  await db.session.create({
+    data: {
+      userId,
+      tokenHash: hashToken(token),
+      expiresAt,
+      userAgent: meta.userAgent?.slice(0, 500) ?? null,
+      ip: meta.ip?.slice(0, 64) ?? null,
+    },
+  });
+
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    // A persistent cookie, not a session cookie — closing the browser, or
+    // the phone going to sleep for a month, must not require signing in again.
+    maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
+  });
+}
+
+/**
+ * Resolve the current viewer, or null. Renews the cookie and the row whenever
+ * the session is more than a day into its life, so an active user's login
+ * rolls forward indefinitely and never quietly expires mid-event.
+ */
+export async function getViewer(): Promise<Viewer | null> {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+
+  const session = await db.session.findUnique({
+    where: { tokenHash: hashToken(token) },
+    include: { user: { include: { department: true } } },
+  });
+
+  if (!session || session.revokedAt) return null;
+  if (session.expiresAt.getTime() < Date.now()) return null;
+
+  const user = session.user;
+  if (!user || !user.isActive || user.deletedAt) return null;
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (Date.now() - session.lastSeenAt.getTime() > dayMs) {
+    const expiresAt = expiryFromNow();
+    await db.session.update({
+      where: { id: session.id },
+      data: { lastSeenAt: new Date(), expiresAt },
+    });
+    jar.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
+    });
+  }
+
+  return user as Viewer;
+}
+
+export async function destroyCurrentSession(): Promise<void> {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (token) {
+    await db.session.updateMany({
+      where: { tokenHash: hashToken(token), revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+  jar.delete(SESSION_COOKIE);
+}

@@ -1,0 +1,497 @@
+// KMIDS Hackathon 2027 — Staff Portal ("Hackathon Studio")
+// Target: TiDB Cloud Serverless (MySQL protocol, port 4000, TLS required).
+//
+// relationMode = "prisma" because TiDB does not enforce foreign keys the way
+// MySQL does in every configuration. Referential integrity is enforced by the
+// application, not the database. See docs/ARCHITECTURE.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+/// Permission tiers are cumulative: each tier includes everything below it.
+enum Tier {
+  T0_ADVISOR
+  T1_MEMBER
+  T2_HEAD
+  T3_ADMIN
+  T4_OWNER
+}
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String? @db.VarChar(255)
+
+  name      String
+  nickname  String?
+  grade     String?
+  phone     String?
+  lineId    String?
+  avatarUrl String? @db.Text
+  shirtSize String?
+  roleTitle String?
+
+  tier         Tier    @default(T1_MEMBER)
+  departmentId String?
+
+  isReserve Boolean @default(false)
+  isMentor  Boolean @default(false)
+  isAlumni  Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  // Login throttling — 5 failures locks the account for 15 minutes.
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  lastLoginAt  DateTime?
+
+  profileCompletedAt DateTime?
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  department Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  headOf            Department[]       @relation("DepartmentHead")
+  sessions          Session[]
+  passwordResets    PasswordReset[]
+  invitesSent       Invite[]           @relation("InviteInvitedBy")
+  assignmentsMade   Assignment[]       @relation("AssignmentCreatedBy")
+  assignmentsOwned  AssignmentAssignee[]
+  comments          Comment[]
+  documents         Document[]
+  files             FileAsset[]
+  forms             Form[]
+  formResponses     FormResponse[]
+  announcements     Announcement[]
+  announcementReads AnnouncementRead[]
+  checkins          Checkin[]
+  incidents         Incident[]
+  auditEntries      AuditLog[]
+
+  @@index([departmentId])
+  @@index([tier])
+  @@map("users")
+}
+
+/// Opaque, database-backed sessions.
+///
+/// The cookie carries a random 32-byte token; only its SHA-256 hash is stored.
+/// Nothing about the session depends on an application secret, so a redeploy —
+/// or even a rotated AUTH_SECRET — cannot log anybody out. This is what makes
+/// "sign in once" true across updates.
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  lastSeenAt DateTime @default(now())
+  userAgent String?   @db.Text
+  ip        String?
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Invite {
+  id           String    @id @default(cuid())
+  email        String
+  code         String    @unique @db.VarChar(64)
+  tier         Tier      @default(T1_MEMBER)
+  departmentId String?
+  name         String?
+  roleTitle    String?
+  invitedById  String
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  invitedBy  User        @relation("InviteInvitedBy", fields: [invitedById], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  @@index([email])
+  @@index([invitedById])
+  @@index([departmentId])
+  @@map("invites")
+}
+
+/// Admin-issued only. No email service is part of this deployment: T4 generates
+/// the link in the admin panel and hands it to the person directly.
+model PasswordReset {
+  id         String    @id @default(cuid())
+  userId     String
+  code       String    @unique @db.VarChar(64)
+  issuedById String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+// ---------------------------------------------------------------------------
+// Structure
+// ---------------------------------------------------------------------------
+
+model Department {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String? @db.Text
+  color       String  @default("#EC4899")
+  icon        String?
+  headUserId  String?
+  sortOrder   Int     @default(0)
+  isGeneral   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  head          User?          @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  members       User[]         @relation("DepartmentMembers")
+  invites       Invite[]
+  assignments   Assignment[]
+  documents     Document[]
+  files         FileAsset[]
+  forms         Form[]
+  announcements Announcement[]
+
+  @@index([headUserId])
+  @@map("departments")
+}
+
+// ---------------------------------------------------------------------------
+// Assignments — the core module
+// ---------------------------------------------------------------------------
+
+enum AssignmentStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  NEEDS_REVIEW
+  APPROVED
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Assignment {
+  id           String           @id @default(cuid())
+  title        String
+  description  String?          @db.Text
+  departmentId String
+  createdById  String
+  dueDate      DateTime?
+  priority     Priority         @default(MEDIUM)
+  status       AssignmentStatus @default(NOT_STARTED)
+  approvedById String?
+  approvedAt   DateTime?
+  linkUrl      String?          @db.Text
+  recurrence   String?
+  year         Int              @default(2027)
+  sortOrder    Int              @default(0)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  department Department           @relation(fields: [departmentId], references: [id])
+  createdBy  User                 @relation("AssignmentCreatedBy", fields: [createdById], references: [id])
+  assignees  AssignmentAssignee[]
+
+  @@index([departmentId])
+  @@index([createdById])
+  @@index([status])
+  @@index([dueDate])
+  @@index([year])
+  @@map("assignments")
+}
+
+model AssignmentAssignee {
+  assignmentId String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@id([assignmentId, userId])
+  @@index([userId])
+  @@map("assignment_assignees")
+}
+
+/// Polymorphic by design: comments hang off assignments, documents, incidents.
+/// TiDB has no cross-table FK enforcement anyway, so a discriminator column is
+/// no weaker here than a real relation would be.
+model Comment {
+  id         String    @id @default(cuid())
+  parentType String    @db.VarChar(32)
+  parentId   String
+  userId     String
+  body       String    @db.Text
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([parentType, parentId])
+  @@index([userId])
+  @@map("comments")
+}
+
+// ---------------------------------------------------------------------------
+// Content
+// ---------------------------------------------------------------------------
+
+enum DocStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+}
+
+model Document {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?   @db.Text
+  departmentId String
+  ownerId      String
+  externalUrl  String    @db.Text
+  status       DocStatus @default(DRAFT)
+  approvedById String?
+  approvedAt   DateTime?
+  tags         Json?
+  year         Int       @default(2027)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id])
+  owner      User       @relation(fields: [ownerId], references: [id])
+
+  @@index([departmentId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([year])
+  @@map("documents")
+}
+
+model FileAsset {
+  id           String  @id @default(cuid())
+  name         String
+  description  String? @db.Text
+  externalUrl  String  @db.Text
+  kind         String  @default("link")
+  departmentId String
+  uploadedById String
+  tags         Json?
+  isBrandKit   Boolean @default(false)
+  year         Int     @default(2027)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id])
+  uploadedBy User       @relation(fields: [uploadedById], references: [id])
+
+  @@index([departmentId])
+  @@index([uploadedById])
+  @@index([isBrandKit])
+  @@map("files")
+}
+
+model Form {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?   @db.Text
+  type          String    @default("external")
+  url           String?   @db.Text
+  slug          String?   @unique
+  schema        Json?
+  ownerId       String
+  departmentId  String?
+  deadline      DateTime?
+  responseCount Int       @default(0)
+  responseUrl   String?   @db.Text
+  isOpen        Boolean   @default(true)
+  year          Int       @default(2027)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  owner      User           @relation(fields: [ownerId], references: [id])
+  department Department?    @relation(fields: [departmentId], references: [id])
+  responses  FormResponse[]
+
+  @@index([ownerId])
+  @@index([departmentId])
+  @@map("forms")
+}
+
+model FormResponse {
+  id          String   @id @default(cuid())
+  formId      String
+  userId      String?
+  payload     Json
+  submittedAt DateTime @default(now())
+
+  form Form  @relation(fields: [formId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([formId])
+  @@index([userId])
+  @@map("form_responses")
+}
+
+// ---------------------------------------------------------------------------
+// Announcements
+// ---------------------------------------------------------------------------
+
+model Announcement {
+  id           String  @id @default(cuid())
+  title        String
+  body         String  @db.Text
+  scope        String  @default("all")
+  departmentId String?
+  authorId     String
+  pinned       Boolean @default(false)
+  year         Int     @default(2027)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  author     User               @relation(fields: [authorId], references: [id])
+  department Department?        @relation(fields: [departmentId], references: [id])
+  reads      AnnouncementRead[]
+
+  @@index([authorId])
+  @@index([departmentId])
+  @@index([pinned])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  announcementId String
+  userId         String
+  readAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@id([announcementId, userId])
+  @@index([userId])
+  @@map("announcement_reads")
+}
+
+// ---------------------------------------------------------------------------
+// Event day
+// ---------------------------------------------------------------------------
+
+model EventItem {
+  id        String   @id @default(cuid())
+  day       String
+  startTime String
+  endTime   String?
+  title     String
+  location  String?
+  notes     String?  @db.Text
+  ownerId   String?
+  sortOrder Int      @default(0)
+  year      Int      @default(2027)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([day])
+  @@index([year])
+  @@map("event_items")
+}
+
+model Checkin {
+  id           String    @id @default(cuid())
+  userId       String
+  day          String
+  checkedInAt  DateTime  @default(now())
+  checkedOutAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([day])
+  @@map("checkins")
+}
+
+model Incident {
+  id           String    @id @default(cuid())
+  reportedById String
+  occurredAt   DateTime  @default(now())
+  severity     String    @default("low")
+  description  String    @db.Text
+  location     String?
+  resolution   String?   @db.Text
+  resolvedAt   DateTime?
+  year         Int       @default(2027)
+
+  reportedBy User @relation(fields: [reportedById], references: [id])
+
+  @@index([reportedById])
+  @@map("incidents")
+}
+
+// ---------------------------------------------------------------------------
+// Ops
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String   @db.VarChar(64)
+  targetType String?  @db.VarChar(32)
+  targetId   String?
+  detail     String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+/// Single-row key/value table for portal-wide switches (archive mode,
+/// event-day mode, the countdown target).
+model Setting {
+  key       String   @id @db.VarChar(64)
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
