@@ -147,6 +147,7 @@ export async function acceptInvite(_prev: FormState, formData: FormData): Promis
           isActive: true,
           failedLogins: 0,
           lockedUntil: null,
+          lastLoginAt: new Date(),
         },
       })
     : await db.user.create({
@@ -157,6 +158,7 @@ export async function acceptInvite(_prev: FormState, formData: FormData): Promis
           tier: invite.tier,
           departmentId: invite.departmentId,
           roleTitle: invite.roleTitle,
+          lastLoginAt: new Date(),
         },
       });
 
@@ -194,7 +196,7 @@ export async function usePasswordReset(_prev: FormState, formData: FormData): Pr
 
   await db.user.update({
     where: { id: reset.userId },
-    data: { passwordHash, failedLogins: 0, lockedUntil: null },
+    data: { passwordHash, failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() },
   });
 
   await db.passwordReset.update({
