@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { assertCan, requireViewer, can, type Viewer } from "@/lib/authorize";
 import { optionalUrlSchema, urlSchema } from "@/lib/url";
+import { FILE_KINDS } from "@/lib/uploads";
 import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/actions/auth";
 import type { DocStatus } from "@prisma/client";
@@ -44,6 +45,75 @@ async function assertDepartmentExists(departmentId: string): Promise<boolean> {
 function writeLimit(viewer: Viewer): FormState | null {
   const limit = rateLimit(`write:${viewer.id}`, RULES.write);
   return limit.ok ? null : { error: retryMessage(limit.retryAfter) };
+}
+
+// ---------------------------------------------------------------------------
+// Document history
+//
+// The portal is edited by thirty students, several of whom will one day open
+// the wrong tab, select all, and paste a Line message over the sponsorship
+// plan. Every save therefore files the *previous* state as a revision before
+// overwriting it, which turns that afternoon from a loss into two clicks.
+//
+// Revisions are capped per document: fifty is far more history than anyone
+// reads, and a document edited every minute for a week should not become the
+// largest thing in the database.
+// ---------------------------------------------------------------------------
+
+const REVISIONS_KEPT = 50;
+
+type RevisionSource = {
+  id: string;
+  version: number;
+  title: string;
+  description: string | null;
+  source: string;
+  externalUrl: string | null;
+  body: string | null;
+  status: DocStatus;
+};
+
+/**
+ * Snapshots the document as it is now and returns the version number the next
+ * save should carry. Never throws: losing the history entry is bad, losing the
+ * edit that came with it would be worse.
+ */
+async function snapshotDocument(
+  document: RevisionSource,
+  editedById: string,
+  reason: "edit" | "restore",
+): Promise<number> {
+  try {
+    await db.documentRevision.create({
+      data: {
+        documentId: document.id,
+        version: document.version,
+        title: document.title,
+        description: document.description,
+        source: document.source,
+        externalUrl: document.externalUrl,
+        body: document.body,
+        status: document.status,
+        editedById,
+        reason,
+      },
+    });
+
+    const stale = await db.documentRevision.findMany({
+      where: { documentId: document.id },
+      select: { id: true },
+      orderBy: { version: "desc" },
+      skip: REVISIONS_KEPT,
+    });
+    if (stale.length > 0) {
+      await db.documentRevision.deleteMany({ where: { id: { in: stale.map((r) => r.id) } } });
+    }
+  } catch {
+    // A duplicate version means two people saved at the same instant; the
+    // other save's snapshot is the one that survives, and this edit proceeds.
+  }
+
+  return document.version + 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,7 +263,19 @@ export async function updateDocument(_prev: FormState, formData: FormData): Prom
   const id = String(formData.get("id") ?? "");
   const existing = await db.document.findUnique({
     where: { id },
-    select: { departmentId: true, ownerId: true, deletedAt: true, status: true, source: true },
+    select: {
+      id: true,
+      departmentId: true,
+      ownerId: true,
+      deletedAt: true,
+      status: true,
+      source: true,
+      version: true,
+      title: true,
+      description: true,
+      externalUrl: true,
+      body: true,
+    },
   });
   if (!existing || existing.deletedAt) return { error: "That document no longer exists." };
 
@@ -240,6 +322,9 @@ export async function updateDocument(_prev: FormState, formData: FormData): Prom
   const link = await resolveAssignmentLink(viewer, d.assignmentId || undefined);
   if (!link.ok) return { error: link.error };
 
+  // What it said before this save, kept before the save happens.
+  const version = await snapshotDocument(existing, viewer.id, "edit");
+
   await db.document.update({
     where: { id },
     data: {
@@ -252,12 +337,14 @@ export async function updateDocument(_prev: FormState, formData: FormData): Prom
       assignmentId: link.id,
       status: d.status,
       tags: parseTags(d.tags),
+      version,
       approvedById: approved ? viewer.id : null,
       approvedAt: approved ? new Date() : null,
     },
   });
 
   await audit(viewer.id, "document.updated", { type: "document", id });
+  revalidatePath(`/documents/${id}/history`);
   revalidatePath("/documents");
   revalidatePath(`/documents/${id}`);
   if (link.id) revalidatePath(`/assignments/${link.id}`);
@@ -303,23 +390,108 @@ export async function deleteDocument(id: string): Promise<void> {
   if (!doc) return;
 
   assertCan(viewer, "delete", { kind: "document", ...doc });
+
+  // Soft delete: the row keeps its text and its whole history, and Admin →
+  // Recycle bin puts it back exactly as it was. No snapshot is needed here —
+  // deleting changes nothing about what the document says.
   await db.document.update({ where: { id }, data: { deletedAt: new Date() } });
   await audit(viewer.id, "document.deleted", { type: "document", id });
   revalidatePath("/documents");
   redirect("/documents");
 }
 
-// ---------------------------------------------------------------------------
-// Files & assets — link-only (decision D2-1). The portal is the index; Drive
-// and Canva hold the bytes. Render's filesystem is ephemeral and TiDB is not
-// a blob store, so this is the only shape that survives a redeploy.
-//
-// It is also the reason there is no upload endpoint to secure: no multipart
-// handler, no temp directory, no MIME sniffing, no path traversal. The safest
-// upload is the one the application cannot perform.
-// ---------------------------------------------------------------------------
+/**
+ * Put an earlier version back.
+ *
+ * The current state is snapshotted first, so a restore can itself be undone —
+ * without that, "restore" is just another way to lose the newest work.
+ */
+export async function restoreDocumentRevision(revisionId: string): Promise<void> {
+  const viewer = await requireViewer();
 
-const FILE_KINDS = ["link", "image", "pdf", "video", "design", "font", "logo", "doc"] as const;
+  const revision = await db.documentRevision.findUnique({ where: { id: revisionId } });
+  if (!revision) return;
+
+  const document = await db.document.findUnique({
+    where: { id: revision.documentId },
+    select: {
+      id: true,
+      departmentId: true,
+      ownerId: true,
+      deletedAt: true,
+      version: true,
+      title: true,
+      description: true,
+      source: true,
+      externalUrl: true,
+      body: true,
+      status: true,
+    },
+  });
+  if (!document || document.deletedAt) return;
+
+  assertCan(viewer, "update", {
+    kind: "document",
+    departmentId: document.departmentId,
+    ownerId: document.ownerId,
+  });
+
+  // Restoring an approved version does not re-approve it: the status comes
+  // back as a draft unless the person restoring could have approved it anyway.
+  const mayApprove = can(viewer, "approve", {
+    kind: "document",
+    departmentId: document.departmentId,
+    ownerId: document.ownerId,
+  });
+  const approved = revision.status === "APPROVED" || revision.status === "PUBLISHED";
+  const status = approved && !mayApprove ? "DRAFT" : revision.status;
+
+  const version = await snapshotDocument(document, viewer.id, "restore");
+
+  await db.document.update({
+    where: { id: document.id },
+    data: {
+      title: revision.title,
+      description: revision.description,
+      source: revision.source,
+      externalUrl: revision.externalUrl,
+      body: revision.body,
+      status,
+      version,
+      approvedById: status === "APPROVED" || status === "PUBLISHED" ? viewer.id : null,
+      approvedAt: status === "APPROVED" || status === "PUBLISHED" ? new Date() : null,
+    },
+  });
+
+  await audit(viewer.id, "document.restored_version", {
+    type: "document",
+    id: document.id,
+    detail: `v${revision.version}`,
+  });
+
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${document.id}`);
+  revalidatePath(`/documents/${document.id}/history`);
+  redirect(`/documents/${document.id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Files & assets — links, and files stored in the database (revising D2-1).
+//
+// The original decision was link-only: Render wipes its disk on every deploy,
+// so an uploaded file could not survive one. That reasoning was right about the
+// disk and wrong about the database — TiDB is the one part of this deployment
+// that outlives a deploy, and a file stored in it is still there after the next
+// twenty. So an asset is now either a Drive link or bytes in `file_chunks`.
+//
+// Linking stays the recommended route for anything large or actively edited in
+// Canva. Uploading is for the things that must not depend on a student's
+// personal Drive still existing in March: the final logo, the signed forms, the
+// print-ready poster.
+//
+// The upload itself is a route handler, not an action here — Server Actions cap
+// their request body. See src/app/(app)/files/upload/route.ts.
+// ---------------------------------------------------------------------------
 
 const fileSchema = z.object({
   name: z.string().trim().min(2, "Name the asset.").max(200),
@@ -359,6 +531,7 @@ export async function createFile(_prev: FormState, formData: FormData): Promise<
       name: d.name,
       description: d.description || null,
       externalUrl: d.externalUrl,
+      storage: "link",
       departmentId: d.departmentId,
       uploadedById: viewer.id,
       kind: d.kind ?? "link",
@@ -387,10 +560,41 @@ export async function deleteFile(id: string): Promise<void> {
     ownerId: f.uploadedById,
   });
 
+  // Soft delete, and the chunks stay exactly where they are: a member deleting
+  // the wrong asset is a restore from the recycle bin, not a re-scan of a
+  // poster nobody has the original of any more.
   await db.fileAsset.update({ where: { id }, data: { deletedAt: new Date() } });
   await audit(viewer.id, "file.deleted", { type: "file", id });
   revalidatePath("/files");
   revalidatePath("/brand");
+}
+
+/**
+ * The only path that actually destroys bytes, and it is T4's alone.
+ *
+ * Deleting an asset hides it; this is what frees the storage, and it is
+ * deliberately harder to reach than the delete button — the recycle bin, an
+ * owner account, and a confirmation.
+ */
+export async function purgeFile(id: string): Promise<void> {
+  const viewer = await requireViewer();
+  assertCan(viewer, "purge", { kind: "system" });
+
+  const f = await db.fileAsset.findUnique({
+    where: { id },
+    select: { name: true, deletedAt: true, sizeBytes: true },
+  });
+  if (!f) return;
+  // Only from the recycle bin: nothing is purged straight out of the index.
+  if (!f.deletedAt) return;
+
+  await db.fileChunk.deleteMany({ where: { fileId: id } });
+  await db.fileAsset.delete({ where: { id } });
+
+  await audit(viewer.id, "file.purged", { type: "file", id, detail: f.name });
+  revalidatePath("/files");
+  revalidatePath("/brand");
+  revalidatePath("/admin/trash");
 }
 
 // ---------------------------------------------------------------------------

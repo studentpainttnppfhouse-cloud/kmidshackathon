@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { assertCan, requireViewer, isAdmin } from "@/lib/authorize";
+import { assertCan, requireViewer } from "@/lib/authorize";
 import { emailSchema, generateCode } from "@/lib/auth";
 import { INVITE_TTL_DAYS, RESET_TTL_HOURS, TIER_ORDER } from "@/lib/constants";
 import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
@@ -342,20 +342,41 @@ export async function setArchiveMode(on: boolean): Promise<void> {
   revalidatePath("/admin");
 }
 
-export async function restoreDeleted(
-  type: "assignment" | "document" | "file" | "announcement",
-  id: string,
-): Promise<void> {
+/**
+ * The recycle bin's one button.
+ *
+ * Everything in this portal is soft-deleted, which is only half a promise: the
+ * other half is being able to get it back without a database client. The page
+ * that calls this is /admin/trash.
+ */
+export type Deletable = "assignment" | "document" | "file" | "announcement" | "form";
+
+const DELETABLES: Deletable[] = ["assignment", "document", "file", "announcement", "form"];
+
+export async function restoreDeleted(type: Deletable, id: string): Promise<void> {
   const viewer = await requireViewer();
-  if (!isAdmin(viewer)) return;
-  if (!["assignment", "document", "file", "announcement"].includes(type)) return;
+  assertCan(viewer, "restore", { kind: "system" });
+  if (!DELETABLES.includes(type)) return;
 
   const data = { deletedAt: null };
   if (type === "assignment") await db.assignment.update({ where: { id }, data });
   if (type === "document") await db.document.update({ where: { id }, data });
   if (type === "file") await db.fileAsset.update({ where: { id }, data });
   if (type === "announcement") await db.announcement.update({ where: { id }, data });
+  if (type === "form") await db.form.update({ where: { id }, data });
 
   await audit(viewer.id, `${type}.restored`, { type, id });
+
   revalidatePath("/admin");
+  revalidatePath("/admin/trash");
+  revalidatePath("/dashboard");
+  revalidatePath(
+    {
+      assignment: "/assignments",
+      document: "/documents",
+      file: "/files",
+      announcement: "/announcements",
+      form: "/forms",
+    }[type],
+  );
 }

@@ -71,7 +71,7 @@ export async function GET() {
       portal: "Hackathon Studio — KMIDS Hackathon 2027",
       exportedAt: new Date().toISOString(),
       exportedBy: viewer!.email,
-      note: "Password hashes, session tokens, invite codes and reset codes are deliberately excluded. External file links point at Google Drive and Canva; export those separately.",
+      note: "Password hashes, session tokens, invite codes and reset codes are deliberately excluded. External file links point at Google Drive and Canva; export those separately. Uploaded files are listed with storage=\"db\" but their bytes are not in this JSON — download each from /files/<id>/raw, or take a database dump, before handing the portal over.",
       counts: {
         users: users.length,
         departments: departments.length,

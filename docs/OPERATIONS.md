@@ -27,8 +27,27 @@ On top of that, once a month: Admin → **Export everything (JSON)** → drop th
 file in the team Drive. It takes ten seconds and it is the thing that saves you
 if a free-tier surprise erases seven months of work.
 
-The export excludes password hashes and session tokens by design, and file
-entries are links — export the Drive folders separately.
+The export excludes password hashes and session tokens by design. File entries
+come out as metadata either way: rows with `storage: "link"` point at Drive —
+export those folders separately — and rows with `storage: "db"` name a file
+whose bytes are in TiDB but not in the JSON. Download those from
+`/files/<id>/raw`, or take a database dump, before a handover.
+
+## File storage
+
+Uploaded files live in the database, so they cost TiDB storage rather than disk.
+Two environment variables bound that, both optional:
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `MAX_UPLOAD_MB` | 20 | Largest single file the portal accepts |
+| `UPLOAD_QUOTA_MB` | 1024 | Total the portal will hold before refusing uploads |
+
+Files & Assets shows what is used against the quota. When it fills, the fix is
+**Admin → Recycle bin → Delete for good** on uploads nobody needs (owner only),
+or raising `UPLOAD_QUOTA_MB` if the TiDB cluster has the room. Deleting an asset
+normally does *not* free storage — that is deliberate, so a restore is always
+possible.
 
 ## Render free tier
 

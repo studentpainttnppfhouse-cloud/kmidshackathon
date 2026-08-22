@@ -22,6 +22,10 @@ export type Action =
   | "create"
   | "update"
   | "delete"
+  /** Destroy for real, past the recycle bin. Owner only, and rarely. */
+  | "purge"
+  /** Bring something back out of the recycle bin. Admin and above. */
+  | "restore"
   | "approve"
   | "assign"
   | "publish"
@@ -87,12 +91,15 @@ export function can(user: Viewer | null, action: Action, resource: Resource): bo
     action === "manage_users" ||
     action === "manage_sessions" ||
     action === "archive" ||
-    action === "export"
+    action === "export" ||
+    // Everything else in the portal is recoverable. Purging is the one door out
+    // of that, so it is the owner's alone — no head, no admin, no exceptions.
+    action === "purge"
   ) {
     return isOwner(user);
   }
 
-  if (action === "manage_departments" || action === "view_audit") {
+  if (action === "manage_departments" || action === "view_audit" || action === "restore") {
     return isAdmin(user);
   }
 

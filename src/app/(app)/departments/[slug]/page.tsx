@@ -15,6 +15,7 @@ import {
   TierPill,
 } from "@/components/ui";
 import { timeAgo } from "@/lib/dates";
+import { assetLinkProps, isStored } from "@/lib/assets";
 
 export const metadata: Metadata = { title: "Department" };
 export const dynamic = "force-dynamic";
@@ -217,12 +218,10 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
                 {files.map((f) => (
                   <li key={f.id}>
                     <a
-                      href={f.externalUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
+                      {...assetLinkProps(f)}
                       className="block truncate text-sm text-ink hover:text-pink-700"
                     >
-                      {f.name} ↗
+                      {f.name} {isStored(f) ? "↓" : "↗"}
                     </a>
                   </li>
                 ))}

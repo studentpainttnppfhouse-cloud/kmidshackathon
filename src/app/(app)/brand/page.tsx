@@ -3,7 +3,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
 import { deleteBrandToken } from "@/lib/actions/brand";
-import { safeHref } from "@/lib/url";
+import { assetLinkProps, isStored } from "@/lib/assets";
 import { ColorForm, FontForm, RampForm } from "@/components/brand-forms";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { CopyButton } from "@/components/chrome";
@@ -285,13 +285,13 @@ export default async function BrandPage() {
             {assets.map((asset) => (
               <a
                 key={asset.id}
-                href={safeHref(asset.externalUrl) ?? "#"}
-                target="_blank"
-                rel="noreferrer noopener"
+                {...assetLinkProps(asset)}
                 className="rounded-xl border border-line p-3 transition hover:border-pink-300"
               >
                 <span className="hs-pill bg-pink-50 text-pink-700">{asset.kind}</span>
-                <span className="mt-1.5 block text-sm font-bold text-ink">{asset.name} ↗</span>
+                <span className="mt-1.5 block text-sm font-bold text-ink">
+                  {asset.name} {isStored(asset) ? "↓" : "↗"}
+                </span>
                 <span className="block text-[11px] text-faint">{asset.department.name}</span>
               </a>
             ))}

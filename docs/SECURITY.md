@@ -173,11 +173,41 @@ storing it in the clear knowingly.
 
 ## Uploads
 
-There are none, and that is the design. The portal stores links; Drive and
-Canva hold the bytes. Render wipes its disk on every deploy, so an upload would
-vanish at the next release anyway. The security consequence is that there is no
-multipart handler, no temp directory, no MIME sniffing and no path traversal to
-get wrong.
+Files can be uploaded, and their bytes go into TiDB rather than onto Render's
+disk (see ARCHITECTURE.md, D2-2). Nothing is ever written to the filesystem, so
+there is still no temp directory and no path traversal to get wrong. What the
+upload path does have to defend is narrower, and it is all in two files —
+`src/lib/uploads.ts` and `src/app/(app)/files/upload/route.ts`:
+
+- **Nothing renders in this origin except a raster image.** `image/png`,
+  `image/jpeg`, `image/gif`, `image/webp` and `image/avif` are served inline
+  with their real type. *Everything else* — an SVG, an HTML file, a PDF — is
+  served as `application/octet-stream` with `Content-Disposition: attachment`,
+  so it downloads instead of executing script against the portal's own origin
+  with the viewer's session attached. That is why there is no denylist of
+  "dangerous" extensions: a download that never renders is safe whatever it
+  contains, and the design team needs its SVG logos.
+- **The uploader's MIME type is never echoed back.** It is stored, and then
+  checked against the inline allowlist at serve time. `nosniff` is set on the
+  response as well as by middleware.
+- **Filenames are reduced before they reach a header.** No control characters,
+  no quotes, no path separators, RFC 5987 encoding for the Thai filenames, and
+  a length cap. `tests/uploads.test.ts` covers this.
+- **Downloads are authorised.** `/files/[id]/raw` runs the same `can()` check as
+  the asset row and answers 404 — not 403 — to anyone who may not read it, since
+  whether an asset exists is itself information. A link pasted into a group chat
+  is useless without an account.
+- **CSRF.** A multipart form cannot be a Server Action, so Next's own Origin
+  check does not apply: the route checks it itself (`src/lib/http.ts`), and
+  refuses a POST that names no origin at all. The session cookie is
+  `SameSite=Lax` besides.
+- **Limits.** `MAX_UPLOAD_MB` per file, enforced against the bytes that actually
+  arrive rather than the browser's claim about them; `UPLOAD_QUOTA_MB` for the
+  portal; and a dedicated rate-limit bucket, since one upload is 20 MB of
+  someone else's storage.
+- **A failed upload leaves nothing behind.** The row and its chunks are removed
+  if the stream dies partway, and a row whose size never got written is refused
+  by the download route rather than served as a corrupt file.
 
 ## Secrets
 

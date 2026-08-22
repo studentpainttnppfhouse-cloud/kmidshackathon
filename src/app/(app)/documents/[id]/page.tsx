@@ -105,6 +105,13 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
               </a>
             ) : null}
 
+            <Link
+              href={`/documents/${document.id}/history`}
+              className="hs-btn hs-btn-secondary hs-no-print"
+            >
+              History{document.version > 1 ? ` (v${document.version})` : ""}
+            </Link>
+
             {editable ? (
               <Link
                 href={`/documents/${document.id}/edit`}
@@ -210,7 +217,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
             }}
             label="Delete this document"
             title="Delete this document?"
-            body="It moves to the recycle bin. An admin can restore it from the admin panel."
+            body="It moves to the recycle bin, and its history stays with it. An admin can put it back from Admin → Recycle bin."
             className="hs-btn hs-btn-danger"
           />
         </div>

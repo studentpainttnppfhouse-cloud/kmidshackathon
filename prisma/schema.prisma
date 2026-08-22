@@ -295,13 +295,17 @@ model Document {
   approvedAt   DateTime?
   tags         Json?
   year         Int       @default(2027)
+  /// Incremented on every save. The number a reader sees, and the number the
+  /// next revision row is filed under.
+  version      Int       @default(1)
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  department Department @relation(fields: [departmentId], references: [id])
-  owner      User       @relation(fields: [ownerId], references: [id])
+  department Department         @relation(fields: [departmentId], references: [id])
+  owner      User               @relation(fields: [ownerId], references: [id])
+  revisions  DocumentRevision[]
 
   @@index([departmentId])
   @@index([ownerId])
@@ -311,11 +315,64 @@ model Document {
   @@map("documents")
 }
 
+/// What a document said before somebody changed it.
+///
+/// A member editing a shared plan and pasting over three weeks of work is the
+/// failure this table exists for. Every save writes the *previous* state here
+/// first, so the current row is never the only copy and any earlier version can
+/// be put back. Restoring is itself a save, so undoing a restore works too.
+model DocumentRevision {
+  id          String    @id @default(cuid())
+  documentId  String
+  /// The version number this snapshot holds — document.version at the time.
+  version     Int
+  title       String
+  description String?   @db.Text
+  source      String    @default("external") @db.VarChar(16)
+  externalUrl String?   @db.Text
+  body        String?   @db.LongText
+  status      DocStatus @default(DRAFT)
+  /// Who made the edit that displaced this version. Null once they are removed.
+  editedById  String?
+  /// "edit" or "restore" — what displaced this version.
+  reason      String    @default("edit") @db.VarChar(16)
+  createdAt   DateTime  @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@index([editedById])
+  @@map("document_revisions")
+}
+
+/// An asset is either a link to something in Drive/Canva, or a file whose bytes
+/// live in TiDB. `storage` says which.
+///
+/// Render's disk is wiped on every deploy, so an uploaded file cannot be kept
+/// on the instance — but the database outlives every deploy, which is why the
+/// bytes go there instead. They are split into `FileChunk` rows rather than one
+/// giant column: TiDB rejects a single transaction entry over ~6 MB, so a
+/// 20 MB poster written as one row would fail on insert and a 20 MB row read
+/// back in one piece would spike memory on a 512 MB Render instance.
 model FileAsset {
-  id           String  @id @default(cuid())
-  name         String
-  description  String? @db.Text
-  externalUrl  String  @db.Text
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+  /// Set for storage = "link". Null for files stored in the database.
+  externalUrl String? @db.Text
+  /// "link" (bytes elsewhere) or "db" (bytes in file_chunks).
+  storage     String  @default("link") @db.VarChar(16)
+  /// The name the file had on the uploader's machine, so a download keeps its
+  /// extension even when the asset is titled "Poster template A3".
+  fileName    String? @db.VarChar(255)
+  /// Declared content type, kept only for files stored here.
+  mimeType    String? @db.VarChar(160)
+  /// Total size in bytes, so the quota can be checked without reading chunks.
+  sizeBytes   Int?
+  /// SHA-256 of the stored bytes — the download ETag, and proof of integrity.
+  checksum    String? @db.VarChar(64)
+
   kind         String  @default("link")
   departmentId String
   uploadedById String
@@ -327,13 +384,27 @@ model FileAsset {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  department Department @relation(fields: [departmentId], references: [id])
-  uploadedBy User       @relation(fields: [uploadedById], references: [id])
+  department Department  @relation(fields: [departmentId], references: [id])
+  uploadedBy User        @relation(fields: [uploadedById], references: [id])
+  chunks     FileChunk[]
 
   @@index([departmentId])
   @@index([uploadedById])
   @@index([isBrandKit])
+  @@index([storage])
   @@map("files")
+}
+
+/// One slice of an uploaded file, in order. See `FileAsset` for why.
+model FileChunk {
+  fileId String
+  idx    Int
+  bytes  Bytes @db.MediumBlob
+
+  file FileAsset @relation(fields: [fileId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([fileId, idx])
+  @@map("file_chunks")
 }
 
 model Form {

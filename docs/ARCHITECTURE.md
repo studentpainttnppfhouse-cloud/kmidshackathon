@@ -104,16 +104,44 @@ without a server or a database.
 actions actually call (`requireViewer`, `requireTier`, `assertCan`). See
 [PERMISSIONS.md](PERMISSIONS.md).
 
-## Files: links, not uploads
+## Files: links, and uploads that live in the database (D2-2)
 
-Render's free tier has an ephemeral filesystem — anything written to disk is
-gone on the next deploy — and MySQL rows are the wrong place for binaries. So
-the file library stores **metadata plus a Drive or Canva link**. The portal is
-the index; Drive holds the bytes.
+The original decision (D2-1) was link-only: Render's filesystem is ephemeral,
+anything written to disk is gone on the next deploy, so the file library stored
+**metadata plus a Drive or Canva link** and nothing else.
 
-This keeps the deployment to a single external credential (`DATABASE_URL`) and
-matches how the team already works. If real uploads become necessary, object
-storage (R2 or S3) is the upgrade path; it adds three or four credentials.
+That reasoning was right about the disk and wrong about the database. TiDB is
+the one part of this deployment that survives a deploy, and it survives a
+graduating senior clearing out their personal Drive too — which is the failure
+this portal actually has to plan for. So an asset row is now one of two things,
+distinguished by `files.storage`:
+
+| `storage` | Where the bytes are | What the portal stores |
+| --- | --- | --- |
+| `link` | Drive, Canva | the URL, as before |
+| `db` | `file_chunks` | the bytes, the MIME type, the size, a SHA-256 |
+
+**Why chunks.** TiDB caps a single transaction entry at roughly 6 MB, so a 20 MB
+poster written as one `LONGBLOB` fails on insert; and reading one back in a
+single row would cost 20 MB of resident memory on a 512 MB Render instance. Each
+file is therefore split into 512 KiB `file_chunks` rows, written one statement
+at a time and streamed back the same way. `src/lib/uploads.ts` holds the
+arithmetic and the naming rules; the writes are in
+`src/app/(app)/files/upload/route.ts`.
+
+**Why a route handler, not a Server Action.** Server Actions cap their request
+body (2 MB here, and raising it raises it for every action in the portal). A
+route handler reads the multipart stream itself, so the upload form is a plain
+`<form enctype="multipart/form-data">` that also works with JavaScript off.
+
+**What is still a link.** Anything over the per-file limit (`MAX_UPLOAD_MB`,
+20 MB by default), and anything actively being edited in Canva. Linking has not
+gone anywhere — it is one of the two tabs on the "Add an asset" form.
+
+**Limits.** `MAX_UPLOAD_MB` per file and `UPLOAD_QUOTA_MB` for the portal, both
+environment variables with defaults, both checked before a byte is written. If
+the team ever outgrows them, object storage (R2 or S3) is still the upgrade
+path; it adds three or four credentials.
 
 ## Documents: both, and the author picks
 
@@ -148,11 +176,28 @@ instance, no embedded font binaries, no licences. The limitation that buys is
 stated where it matters: base-14 fonts are WinAnsi, so PDF export is Latin-only
 and Thai text goes out as `.docx` or `.md` instead.
 
-## Soft deletes
+## Not losing work
 
-Nothing is hard-deleted. Every content model carries `deletedAt`, every list
-query filters on it, and an admin can restore. Students delete things by
-accident.
+Thirty students share this portal, several of them at 1am the night before a
+deadline. Three mechanisms, in order of how often they save somebody:
+
+**Soft deletes.** Nothing is hard-deleted. Every content model carries
+`deletedAt`, every list query filters on it, and **Admin → Recycle bin**
+(`/admin/trash`) lists everything deleted with one button that puts it back.
+Deleting an uploaded file leaves its chunks exactly where they were, so a
+restore is instant rather than a re-scan of a poster nobody has the original of.
+
+**Document history.** Every save of a document files the *previous* state into
+`document_revisions` before overwriting it — the fifty most recent versions,
+each with who displaced it and when. `/documents/[id]/history` shows them and
+restores any one of them. A restore is itself a save, so it snapshots the
+current text first and can be undone in turn. This is the answer to a member
+pasting over three weeks of work: two clicks, not a lost afternoon.
+
+**Purging is the owner's alone.** `can(user, "purge", …)` is T4-only, reachable
+only from the recycle bin, and only for uploaded files — they are the one kind
+of deleted row that costs storage. Every other tier, admins included, can only
+hide things. See `tests/authorize.test.ts`, which asserts exactly that.
 
 ## The `year` column
 

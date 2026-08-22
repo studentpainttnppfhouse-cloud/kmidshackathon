@@ -179,7 +179,7 @@ npm run dev
 | People directory and org chart | Done |
 | Documents — written in the portal *or* linked from Drive | Done |
 | Document export — `.docx`, `.pdf`, Markdown, no dependencies | Done |
-| Files & assets — link index, plus the Brand Kit | Done |
+| Files & assets — uploads stored in the database, links, plus the Brand Kit | Done |
 | Brand Kit — editable palette, generated colour ramps, fonts, PDF export | Done |
 | Forms — built and answered in the portal, plus external Google Forms | Done |
 | Announcements with read receipts | Done |
@@ -207,6 +207,38 @@ The editor is a textarea with a live preview rather than a rich-text surface,
 and that is deliberate: a contenteditable editor stores HTML, which means
 storing markup written by a user and rendering it back — the exact shape of a
 stored-XSS bug. Markdown stores text.
+
+## Files that do not disappear
+
+An asset is either a **link** to Drive or Canva, or a **file uploaded into the
+portal**. An uploaded file's bytes go into TiDB — not onto Render's disk, which
+is wiped on every deploy — so it is still there after the next twenty releases,
+and after the person who uploaded it graduates and clears out their Drive.
+
+| | Link | Upload |
+| --- | --- | --- |
+| Bytes live in | Drive, Canva | The portal's database |
+| Survives a deploy | Yes | Yes |
+| Survives the owner leaving school | Only if they share it properly | Yes |
+| Size | Anything | 20 MB each by default (`MAX_UPLOAD_MB`) |
+| Best for | Anything huge, or still being edited | Final logos, signed forms, print-ready posters |
+
+Big files are split into 512 KiB rows because TiDB will not take a 20 MB write
+in one statement, and streamed back the same way. Downloads are authorised like
+every other page, and anything that is not a plain image downloads rather than
+opening — an uploaded SVG or HTML file must never run script on the portal's own
+origin. See `docs/SECURITY.md`.
+
+## Nothing gets lost
+
+Deleting anything — a task, a document, an asset, a form, an announcement —
+moves it to **Admin → Recycle bin**, where one button puts it back. Deleting an
+uploaded file leaves its bytes untouched, so the restore is instant. Only the
+owner (T4) can destroy an upload for good, and only from that page.
+
+Documents keep their history besides: every save files the previous version, and
+**History** on any document shows the last fifty with a restore button on each.
+Restoring snapshots the current text first, so it can be undone in turn.
 
 ## Building a form
 

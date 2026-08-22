@@ -184,6 +184,33 @@ test("the audit log is T3 and above", () => {
   assert.equal(can(advisor, "view_audit", { kind: "system" }), false);
 });
 
+// --- the recycle bin --------------------------------------------------------
+//
+// Deleting is recoverable for everybody; getting something back is an admin's
+// job; destroying it for good is the owner's alone. These three tests are the
+// whole promise that a member cannot lose the team's work.
+
+test("restoring from the recycle bin is T3 and above", () => {
+  assert.equal(can(owner, "restore", { kind: "system" }), true);
+  assert.equal(can(admin, "restore", { kind: "system" }), true);
+  assert.equal(can(head, "restore", { kind: "system" }), false);
+  assert.equal(can(member, "restore", { kind: "system" }), false);
+});
+
+test("purging for good is owner-only — an admin cannot destroy anything", () => {
+  assert.equal(can(owner, "purge", { kind: "system" }), true);
+  assert.equal(can(admin, "purge", { kind: "system" }), false);
+  assert.equal(can(head, "purge", { kind: "system" }), false);
+  assert.equal(can(member, "purge", { kind: "system" }), false);
+  assert.equal(can(advisor, "purge", { kind: "system" }), false);
+});
+
+test("read-only accounts cannot purge or restore either", () => {
+  const alumnus = user("T4_OWNER", { isAlumni: true });
+  assert.equal(can(alumnus, "purge", { kind: "system" }), false);
+  assert.equal(can(alumnus, "restore", { kind: "system" }), false);
+});
+
 // --- announcements ----------------------------------------------------------
 
 test("members never broadcast; heads reach their own department only", () => {
