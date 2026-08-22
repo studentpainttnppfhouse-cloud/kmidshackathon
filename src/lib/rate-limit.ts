@@ -67,6 +67,9 @@ export const RULES = {
   code: { limit: 10, windowMs: 10 * 60 * 1000, blockMs: 30 * 60 * 1000 },
   write: { limit: 60, windowMs: 60 * 1000, blockMs: 60 * 1000 },
   search: { limit: 90, windowMs: 60 * 1000, blockMs: 30 * 1000 },
+  // Uploads are metered separately from other writes: each one can be 20 MB of
+  // database storage, and a burst of thirty is somebody's photo roll, not work.
+  upload: { limit: 20, windowMs: 10 * 60 * 1000, blockMs: 5 * 60 * 1000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export function rateLimit(key: string, rule: RateLimitRule): RateLimitResult {

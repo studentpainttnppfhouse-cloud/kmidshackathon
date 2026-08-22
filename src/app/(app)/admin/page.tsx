@@ -55,6 +55,8 @@ export default async function AdminPage() {
       db.assignment.count({ where: { deletedAt: { not: null } } }),
       db.document.count({ where: { deletedAt: { not: null } } }),
       db.fileAsset.count({ where: { deletedAt: { not: null } } }),
+      db.announcement.count({ where: { deletedAt: { not: null } } }),
+      db.form.count({ where: { deletedAt: { not: null } } }),
     ]),
     getSettings([SETTING_KEYS.eventPanel]),
   ]);
@@ -82,7 +84,12 @@ export default async function AdminPage() {
         <Stat label="Active staff" value={users.filter((u) => u.isActive).length} />
         <Stat label="Pending invites" value={invites.length} />
         <Stat label="Live sessions" value={sessionCount} />
-        <Stat label="Recycle bin" value={recycleBin} tone={recycleBin > 0 ? "warn" : "default"} />
+        <Stat
+          label="Recycle bin"
+          value={recycleBin}
+          tone={recycleBin > 0 ? "warn" : "default"}
+          href="/admin/trash"
+        />
       </div>
 
       {lockedOut.length > 0 ? (

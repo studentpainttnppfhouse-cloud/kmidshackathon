@@ -77,18 +77,72 @@ function migrationNames(): string[] {
     .sort();
 }
 
+/** The tables one migration creates, read out of the SQL itself. */
+function tablesCreatedBy(migration: string): string[] {
+  const sql = readFileSync(join(MIGRATIONS_DIR, migration, "migration.sql"), "utf8");
+  return [...sql.matchAll(/CREATE TABLE\s+`([^`]+)`/gi)].map((m) => m[1].toLowerCase());
+}
+
 /** Every table the migrations create, read out of the SQL itself. */
 function expectedTables(): string[] {
   const names = new Set<string>();
+  for (const migration of migrationNames()) {
+    for (const table of tablesCreatedBy(migration)) names.add(table);
+  }
+  return [...names];
+}
+
+/**
+ * How much of the migration history a hand-built database already satisfies.
+ *
+ * A database whose schema was pasted into the TiDB SQL Editor has the right
+ * tables and no history, and gets baselined. The subtlety is a database
+ * baselined that way *before* a new migration was written: its tables match
+ * every migration except the newest, and calling that "half-built" would refuse
+ * to boot a perfectly healthy portal every time somebody adds a table.
+ *
+ * So the answer is a prefix, not a yes/no: the migrations whose tables are all
+ * present get recorded as applied, and `migrate deploy` runs the rest — which
+ * is exactly the state a clean deploy would be in.
+ */
+type Baseline =
+  | { ok: true; applied: string[] }
+  | { ok: false; migration: string; missing: string[] };
+
+function baselinePrefix(tables: Set<string>): Baseline {
+  const applied: string[] = [];
+  // Migrations that only ALTER carry no evidence of their own; they ride along
+  // with the next migration that does create a table.
+  let undecided: string[] = [];
 
   for (const migration of migrationNames()) {
-    const sql = readFileSync(join(MIGRATIONS_DIR, migration, "migration.sql"), "utf8");
-    for (const match of sql.matchAll(/CREATE TABLE\s+`([^`]+)`/gi)) {
-      names.add(match[1].toLowerCase());
+    const created = tablesCreatedBy(migration);
+
+    if (created.length === 0) {
+      undecided.push(migration);
+      continue;
     }
+
+    const present = created.filter((table) => tables.has(table));
+
+    if (present.length === created.length) {
+      applied.push(...undecided, migration);
+      undecided = [];
+      continue;
+    }
+
+    // Nothing from this migration exists: the database is baselined up to here
+    // and `migrate deploy` applies this one and everything after it.
+    if (present.length === 0) break;
+
+    return {
+      ok: false,
+      migration,
+      missing: created.filter((table) => !tables.has(table)),
+    };
   }
 
-  return [...names];
+  return { ok: true, applied };
 }
 
 /**
@@ -213,10 +267,20 @@ async function reconcileSchema(db: PrismaClient): Promise<boolean> {
 
   say(`database holds ${count(tables.size, "table")}, no migration history: ${[...tables].sort().join(", ")}`);
 
-  if (present.length === expected.length) {
-    say("every table this portal needs is already there — recording them as applied (no data is touched)…");
+  const baseline = present.length > 0 ? baselinePrefix(tables) : null;
 
-    for (const migration of migrationNames()) {
+  // `applied` empty with tables of ours present means the tables that exist come
+  // from the middle of the history, not the start of it — a hand-repaired
+  // schema, and a person's decision rather than this script's.
+  if (baseline?.ok && baseline.applied.length > 0) {
+    const pending = migrationNames().length - baseline.applied.length;
+    say(
+      `${count(baseline.applied.length, "migration")} worth of tables are already there — ` +
+        `recording them as applied (no data is touched)` +
+        `${pending > 0 ? `; ${count(pending, "migration")} left for migrate deploy` : ""}…`,
+    );
+
+    for (const migration of baseline.applied) {
       if (!run("prisma", ["migrate", "resolve", "--applied", migration])) {
         complain(`could not record ${migration} as applied.`);
         return false;
@@ -226,11 +290,13 @@ async function reconcileSchema(db: PrismaClient): Promise<boolean> {
     return true;
   }
 
-  if (present.length > 0) {
-    const missing = expected.filter((table) => !tables.has(table));
+  if (baseline) {
+    const detail = baseline.ok
+      ? `${present.length} of ${expected.length} tables exist, but not the earliest ones.`
+      : `${baseline.migration} is partly applied.\n  Missing: ${baseline.missing.join(", ")}`;
+
     complain(
-      `the schema is half-built — ${present.length} of ${expected.length} tables exist.\n` +
-        `  Missing: ${missing.join(", ")}\n\n` +
+      `the schema is half-built — ${detail}\n\n` +
         "  Nobody has signed in yet if this is a new deployment, so the quickest\n" +
         "  repair is to recreate the database in the TiDB Cloud SQL Editor:\n\n" +
         `    DROP DATABASE \`${databaseName() ?? "hackathon_studio"}\`;\n` +

@@ -106,10 +106,21 @@ export default async function HelpPage() {
               q: "Can I upload a file?",
               a: (
                 <>
-                  Not to the portal itself, on purpose. Render wipes its disk on every deploy, so
-                  an uploaded file would disappear the next time the portal updated. Keep the bytes
-                  in Drive or Canva and link them from Files &amp; Assets — the portal is the
-                  index, not the drive.
+                  Yes. <Link href="/files/new">Files &amp; Assets → Add an asset</Link> stores the
+                  file in the portal&rsquo;s database, not on the server&rsquo;s disk, so it
+                  survives every update and stays here after whoever uploaded it graduates. Up to
+                  20&nbsp;MB each. Anything bigger, or anything you are still editing in Canva, is
+                  better as a link — that tab is right next to it.
+                </>
+              ),
+            },
+            {
+              q: "Somebody overwrote my document. Is it gone?",
+              a: (
+                <>
+                  No. Every save keeps the previous version — open the document and press{" "}
+                  <strong>History</strong> to read any of them and put one back. Restoring keeps
+                  the current text as a version first, so you can undo the undo.
                 </>
               ),
             },
@@ -129,9 +140,11 @@ export default async function HelpPage() {
               q: "What happens when I delete something?",
               a: (
                 <>
-                  Nothing is really gone. Tasks, documents, assets and announcements are
-                  soft-deleted into a recycle bin that an admin can restore from. Form responses
-                  are the exception — removing one deletes it.
+                  Nothing is really gone. Tasks, documents, assets, forms and announcements move
+                  into a recycle bin, and an admin puts them back from Admin → Recycle bin — an
+                  uploaded file comes back with its contents intact. Only the owner can destroy an
+                  upload for good, and only from that page. Form responses are the exception —
+                  removing one deletes it.
                 </>
               ),
             },
