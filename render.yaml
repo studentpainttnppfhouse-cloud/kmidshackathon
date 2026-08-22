@@ -12,12 +12,15 @@ services:
     region: singapore # closest Render region to Bangkok
     branch: main
     healthCheckPath: /api/health
-    buildCommand: npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
+    buildCommand: npm ci && npx prisma generate && npm run db:deploy && npm run build
     startCommand: npm start
     autoDeploy: true
     envVars:
       - key: DATABASE_URL
-        sync: false # set this by hand — it is the TiDB Cloud string, never committed
+        # Set this by hand — the TiDB Cloud string, never committed. Port 4000.
+        # ?sslaccept=strict is added automatically if you leave it off; TiDB
+        # rejects any connection that is not TLS.
+        sync: false
       - key: AUTH_SECRET
         # Render generates this once and keeps it across deploys. Sessions do
         # not depend on it, so even a rotation would not sign anybody out.

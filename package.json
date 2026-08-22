@@ -10,10 +10,10 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "db:migrate": "tsx scripts/prisma.ts migrate dev",
+    "db:deploy": "tsx scripts/prisma.ts migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio",
+    "db:studio": "tsx scripts/prisma.ts studio",
     "test": "tsx --test tests/*.test.ts"
   },
   "prisma": {
