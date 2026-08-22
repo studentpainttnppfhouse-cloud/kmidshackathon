@@ -9,8 +9,12 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
+import { resolveDatabaseUrl } from "../src/lib/database-url";
 
-const db = new PrismaClient();
+// Same TLS normalization the app uses, so seeding works with whatever string
+// was pasted into DATABASE_URL. See src/lib/database-url.ts.
+const datasourceUrl = resolveDatabaseUrl();
+const db = new PrismaClient(datasourceUrl ? { datasourceUrl } : undefined);
 
 const DEPARTMENTS = [
   {

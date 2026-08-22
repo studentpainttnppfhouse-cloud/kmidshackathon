@@ -72,6 +72,7 @@ depend on the build or on `AUTH_SECRET`. Ship whenever.
 | Slow first load in the morning | Free-tier cold start. Expected; see above |
 | One person cannot sign in | Are they locked out? Is their account Active? Is the email `@kmids.ac.th`? |
 | A build fails | Read the migration step first — that is where it usually is |
+| `1105: Connections using insecure transport are prohibited` | TiDB rejecting a non-TLS connection. The URL needs `?sslaccept=strict`; the portal now appends it to any `*.tidbcloud.com` string automatically, so this means an old build — redeploy |
 | Somebody deleted something | Nothing is hard-deleted. It is in the recycle bin |
 
 ## Handover to 2028

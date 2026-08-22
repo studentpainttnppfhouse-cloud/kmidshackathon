@@ -44,8 +44,10 @@ You need two things: a TiDB Cloud database and a Render account. Both free.
 
 1. Create a free **Serverless** cluster at <https://tidbcloud.com>.
 2. **Connect → Connect With → Prisma** and copy the connection string.
-3. It must keep `?sslaccept=strict` and port `4000` — TiDB requires TLS and does
-   not use MySQL's usual 3306.
+3. Port is `4000`, not MySQL's usual 3306, and TiDB refuses any connection that
+   is not TLS. Keep `?sslaccept=strict` on the end — and if you paste a string
+   without it, the portal adds it for you (`src/lib/database-url.ts`), so
+   nothing fails at 2am over a missing suffix.
 
 ### 2. Hosting (Render)
 
