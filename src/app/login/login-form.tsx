@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { signIn, type FormState } from "@/lib/actions/auth";
-import { SubmitButton } from "@/components/submit-button";
+import { BotFields, Feedback, PasswordField, SubmitButton } from "@/components/form-bits";
 import { ALLOWED_EMAIL_DOMAIN } from "@/lib/constants";
 
 const initial: FormState = {};
@@ -12,6 +12,8 @@ export function LoginForm() {
 
   return (
     <form action={action} className="space-y-4">
+      <BotFields />
+
       <div>
         <label className="hs-label" htmlFor="email">
           KMIDS email
@@ -29,26 +31,15 @@ export function LoginForm() {
         />
       </div>
 
-      <div>
-        <label className="hs-label" htmlFor="password">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          autoComplete="current-password"
-          placeholder="••••••••••"
-          className="hs-input"
-        />
-      </div>
+      <PasswordField
+        id="password"
+        name="password"
+        label="Password"
+        autoComplete="current-password"
+        placeholder="••••••••••"
+      />
 
-      {state.error ? (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      ) : null}
+      <Feedback state={state} />
 
       <SubmitButton pendingLabel="Signing in…">Sign in</SubmitButton>
 

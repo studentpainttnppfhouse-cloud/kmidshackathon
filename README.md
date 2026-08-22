@@ -5,7 +5,7 @@ the work stops living in personal Drives, LINE chats and three different
 spreadsheets — and so it survives into 2028 instead of being rebuilt from
 scratch.
 
-**Stack:** Next.js 15 (App Router) · TypeScript · Tailwind v4 · Prisma ·
+**Stack:** Next.js 16 (App Router) · TypeScript · Tailwind v4 · Prisma ·
 TiDB Cloud (MySQL) · Render.
 **Running cost:** 0 THB on the free tiers.
 
@@ -157,8 +157,10 @@ npm run dev
 | --- | --- |
 | `npm run dev` | Development server on :3000 |
 | `npm run build` / `npm start` | Production build and serve |
-| `npm test` | Permission audit — every tier against every action |
+| `npm test` | Unit suite — permissions, link safety, exports, forms, crypto |
+| `npm run test:e2e` | Browser suite — needs a running server, see `docs/TESTING.md` |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run audit` | Fails on a high/critical advisory in a runtime dependency |
 | `npm run db:migrate` | Create a migration from schema changes |
 | `npm run db:deploy` | Apply migrations |
 | `npm run db:bootstrap` | Migrate + seed an empty database (what Render runs) |
@@ -175,17 +177,52 @@ npm run dev
 | Assignments — board, list, calendar, my tasks, comments, approvals | Done |
 | Department workspaces ×6 plus General | Done |
 | People directory and org chart | Done |
-| Documents — metadata here, bodies in Google Docs | Done |
+| Documents — written in the portal *or* linked from Drive | Done |
+| Document export — `.docx`, `.pdf`, Markdown, no dependencies | Done |
 | Files & assets — link index, plus the Brand Kit | Done |
-| Forms hub — external Google Forms, internal forms | Done |
+| Brand Kit — editable palette, generated colour ramps, fonts, PDF export | Done |
+| Forms — built and answered in the portal, plus external Google Forms | Done |
 | Announcements with read receipts | Done |
-| Event-day mode — run sheet, check-in, incident log, quick reference | Done |
-| Admin — accounts, tiers, invites, resets, sessions, audit log, export | Done |
+| Site-wide search across everything you may read | Done |
+| Event-day mode — run sheet, check-in, incident log; hideable until needed | Done |
+| Admin — accounts, tiers, invites, bulk import, resets, sessions, audit, export | Done |
+| Dark mode, print stylesheet, loading states, keyboard and screen-reader paths | Done |
 | Social Media Command Center | Phase 3 — schema is in place |
 | Archive & handover freeze | Phase 6 — `year` columns and export already work |
 
+## Writing documents in the portal
+
+A document is either a **Drive link** the portal indexes, or a document
+**written here** — you pick per document. A portal document is Markdown, is
+searchable by its contents, can be attached to a task as the submission for it,
+and exports to:
+
+| Format | Notes |
+| --- | --- |
+| `.docx` | A real Word file. Headings, bold, italic, lists, quotes, code. |
+| `.pdf` | Generated directly — no headless browser, no font binaries. Latin script only (see `docs/SECURITY.md`). |
+| `.md` | The source, for editing anywhere else. |
+
+The editor is a textarea with a live preview rather than a rich-text surface,
+and that is deliberate: a contenteditable editor stores HTML, which means
+storing markup written by a user and rendering it back — the exact shape of a
+stored-XSS bug. Markdown stores text.
+
+## Building a form
+
+**Forms → New form** builds one inside the portal: short answer, paragraph,
+number, date, email, dropdown, multiple choice, checkboxes, yes/no/maybe, and a
+1–5 scale. Answers stay in TiDB. Only the form's owner and admins can read the
+response table; everybody else sees their own answers and can change them until
+the form closes.
+
+External Google Forms still work exactly as before — the portal tracks the
+link, the owner, the deadline and where the responses land.
+
 ## Documentation
 
+- [`docs/SECURITY.md`](docs/SECURITY.md) — the threat model, every control, and
+  the limits stated plainly
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it is built, and the
   decisions that shaped it
 - [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) — the tier model, action by action

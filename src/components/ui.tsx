@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { safeHref } from "@/lib/url";
 import {
   DOC_STATUS_LABEL,
   PRIORITY_LABEL,
@@ -35,6 +36,59 @@ export function SectionTitle({
 
 export function Eyebrow({ children }: { children: ReactNode }) {
   return <p className="hs-eyebrow">{children}</p>;
+}
+
+/**
+ * The header every index page opens with: eyebrow, title, and the one action
+ * that page is for.
+ *
+ * The action lives up here rather than at the foot of the page because that is
+ * where somebody looks for it — the old layout put "New task" below four
+ * hundred rows of board, which meant scrolling past everything to add anything.
+ */
+export function PageHeader({
+  eyebrow,
+  title,
+  subtitle,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <header className="hs-enter flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0">
+        <p className="hs-eyebrow">{eyebrow}</p>
+        <h1 className="hs-h1">{title}</h1>
+        {subtitle ? <p className="mt-1 max-w-2xl text-sm text-muted">{subtitle}</p> : null}
+      </div>
+      {action ? <div className="flex shrink-0 flex-wrap gap-2">{action}</div> : null}
+    </header>
+  );
+}
+
+/** "Last updated" line. Shown wherever a page's freshness is the question. */
+export function LastUpdated({ at, label = "Last updated" }: { at: Date | null; label?: string }) {
+  if (!at) return null;
+  return (
+    <p className="text-xs text-faint">
+      {label}{" "}
+      <time dateTime={at.toISOString()} title={at.toISOString()}>
+        {new Intl.DateTimeFormat("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+          timeZone: "Asia/Bangkok",
+        }).format(at)}
+      </time>{" "}
+      (Bangkok)
+    </p>
+  );
 }
 
 export function EmptyState({
@@ -157,13 +211,18 @@ export function Avatar({
     .join("")
     .toUpperCase();
 
-  if (url) {
+  // An avatar URL is author-controlled and lands in `src`. It is validated on
+  // the way in, and again here — a row written before that check existed must
+  // render as initials, not as a scheme the browser will execute.
+  const src = safeHref(url);
+
+  if (src) {
     return (
       // Remote avatars come from arbitrary Drive/Canva links, so next/image's
       // domain allowlist would be a maintenance burden for no gain here.
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={url}
+        src={src}
         alt={label}
         width={size}
         height={size}

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { requireViewer, can, isAdmin } from "@/lib/authorize";
 import { markAnnouncementRead } from "@/lib/actions/content";
-import { AnnouncementForm } from "@/components/content-forms";
-import { Avatar, Card, EmptyState, SectionTitle } from "@/components/ui";
+import Link from "next/link";
+import { Avatar, EmptyState, PageHeader } from "@/components/ui";
 import { timeAgo } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Announcements" };
@@ -42,15 +42,22 @@ export default async function AnnouncementsPage() {
 
   const activeStaff = await db.user.count({ where: { deletedAt: null, isActive: true } });
 
+  const canPost = canBroadcast || postable.length > 0;
+
   return (
-    <div className="space-y-5">
-      <header>
-        <p className="hs-eyebrow">Announcements</p>
-        <h1 className="hs-h1">The record, not the alarm</h1>
-        <p className="mt-1 text-sm text-muted">
-          Urgent things still go to LINE. This is where they stay findable.
-        </p>
-      </header>
+    <div className="hs-enter space-y-5">
+      <PageHeader
+        eyebrow="Announcements"
+        title="The record, not the alarm"
+        subtitle="Urgent things still go to LINE. This is where they stay findable."
+        action={
+          canPost ? (
+            <Link href="/announcements/new" className="hs-btn hs-btn-primary">
+              <span aria-hidden="true">＋</span> New announcement
+            </Link>
+          ) : null
+        }
+      />
 
       {announcements.length === 0 ? (
         <EmptyState title="Nothing posted yet" />
@@ -123,19 +130,6 @@ export default async function AnnouncementsPage() {
         </div>
       )}
 
-      {postable.length > 0 || canBroadcast ? (
-        <Card>
-          <SectionTitle>Post an announcement</SectionTitle>
-          <AnnouncementForm
-            departments={(canBroadcast ? departments : postable).map((d) => ({
-              id: d.id,
-              name: d.name,
-            }))}
-            canBroadcast={canBroadcast}
-            defaultDepartmentId={viewer.departmentId ?? undefined}
-          />
-        </Card>
-      ) : null}
     </div>
   );
 }

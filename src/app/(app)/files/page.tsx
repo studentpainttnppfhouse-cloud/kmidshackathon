@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
-import { FileForm } from "@/components/content-forms";
-import { Banner, Card, EmptyState, SectionTitle } from "@/components/ui";
+import { safeHref } from "@/lib/url";
+import { Banner, EmptyState, PageHeader } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
 import type { Prisma } from "@prisma/client";
 
@@ -37,24 +37,36 @@ export default async function FilesPage({
 
   // Tag filtering happens here rather than in SQL: TiDB is MySQL, so the tags
   // column is plain JSON with no GIN-style index to search against.
+  const readable = files.filter((f) =>
+    can(viewer, "read", { kind: "file", departmentId: f.departmentId, ownerId: f.uploadedById }),
+  );
+
   const visible = tag
-    ? files.filter((f) => Array.isArray(f.tags) && (f.tags as string[]).includes(tag))
-    : files;
+    ? readable.filter((f) => Array.isArray(f.tags) && (f.tags as string[]).includes(tag))
+    : readable;
 
   const allTags = [
-    ...new Set(files.flatMap((f) => (Array.isArray(f.tags) ? (f.tags as string[]) : []))),
+    ...new Set(readable.flatMap((f) => (Array.isArray(f.tags) ? (f.tags as string[]) : []))),
   ].sort();
 
-  const creatable = departments.filter((d) =>
+  const canCreate = departments.some((d) =>
     can(viewer, "create", { kind: "file", departmentId: d.id, ownerId: viewer.id }),
   );
 
   return (
-    <div className="space-y-5">
-      <header>
-        <p className="hs-eyebrow">Files & assets</p>
-        <h1 className="hs-h1">The index, not the drive</h1>
-      </header>
+    <div className="hs-enter space-y-5">
+      <PageHeader
+        eyebrow="Files & assets"
+        title="The index, not the drive"
+        subtitle="Every logo, template and deck the team has, with a link to where the bytes actually live."
+        action={
+          canCreate ? (
+            <Link href="/files/new" className="hs-btn hs-btn-primary">
+              <span aria-hidden="true">＋</span> Link an asset
+            </Link>
+          ) : null
+        }
+      />
 
       <Banner tone="info">
         The portal stores links, not files. Keep the actual bytes in Drive or
@@ -65,6 +77,7 @@ export default async function FilesPage({
       <form className="flex flex-wrap gap-2">
         <input
           name="q"
+          type="search"
           defaultValue={q ?? ""}
           placeholder="Search assets…"
           className="hs-input max-w-xs"
@@ -104,16 +117,29 @@ export default async function FilesPage({
       ) : null}
 
       {visible.length === 0 ? (
-        <EmptyState title="Nothing here yet" hint="Link the first asset below." />
+        <EmptyState
+          title="Nothing here yet"
+          hint="Link the first asset, or clear the filters."
+          action={
+            canCreate ? (
+              <Link href="/files/new" className="hs-btn hs-btn-primary mt-2">
+                Link an asset
+              </Link>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((f) => (
             <a
               key={f.id}
-              href={f.externalUrl}
+              // safeHref again at the point of rendering: an asset row written
+              // before the scheme allowlist existed becomes a dead link rather
+              // than an executable one.
+              href={safeHref(f.externalUrl) ?? "#"}
               target="_blank"
               rel="noreferrer noopener"
-              className="hs-card p-4 transition hover:border-pink-300"
+              className="hs-card p-4"
             >
               <span className="mb-1.5 flex items-center gap-2">
                 <span className="hs-pill bg-pink-50 text-pink-700">{f.kind}</span>
@@ -135,12 +161,6 @@ export default async function FilesPage({
         </div>
       )}
 
-      {creatable.length > 0 ? (
-        <Card>
-          <SectionTitle>Link an asset</SectionTitle>
-          <FileForm departments={creatable.map((d) => ({ id: d.id, name: d.name }))} />
-        </Card>
-      ) : null}
     </div>
   );
 }

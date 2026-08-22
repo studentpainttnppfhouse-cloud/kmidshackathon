@@ -1,11 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { assertCan, type Resource } from "@/lib/authorize";
+import { assertCan, can, type Resource, type Viewer } from "@/lib/authorize";
 import { requireViewer } from "@/lib/authorize";
+import { optionalUrlSchema } from "@/lib/url";
+import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/actions/auth";
 import type { AssignmentStatus, Priority } from "@prisma/client";
 
@@ -26,7 +29,7 @@ const assignmentSchema = z.object({
   dueDate: z.string().optional().or(z.literal("")),
   priority: z.enum(PRIORITIES),
   status: z.enum(STATUSES),
-  linkUrl: z.string().trim().url("That is not a valid link.").optional().or(z.literal("")),
+  linkUrl: optionalUrlSchema,
   recurrence: z.string().trim().max(60).optional().or(z.literal("")),
 });
 
@@ -36,6 +39,41 @@ function parseDue(value: string | undefined): Date | null {
   // so "due today" does not go red at midnight UTC, which is 7 AM in Bangkok.
   const d = new Date(`${value}T23:59:59+07:00`);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function writeLimit(viewer: Viewer): FormState | null {
+  const limit = rateLimit(`write:${viewer.id}`, RULES.write);
+  return limit.ok ? null : { error: retryMessage(limit.retryAfter) };
+}
+
+/**
+ * Assignee ids come from checkboxes in a form body, which means they come from
+ * whatever the browser felt like posting.
+ *
+ * TiDB does not enforce foreign keys here (`relationMode = "prisma"`), so an
+ * id that belongs to nobody inserts cleanly and produces an assignment row
+ * whose `assignees` join returns nothing — work assigned to a ghost. Worse, an
+ * id belonging to a deleted or suspended account would quietly put tasks back
+ * on somebody who has left. Both are cheap to rule out with one query.
+ */
+async function validAssigneeIds(ids: string[]): Promise<string[] | null> {
+  const unique = [...new Set(ids)].slice(0, 50);
+  if (unique.length === 0) return [];
+
+  const found = await db.user.findMany({
+    where: { id: { in: unique }, deletedAt: null, isActive: true },
+    select: { id: true },
+  });
+
+  return found.length === unique.length ? unique : null;
+}
+
+async function departmentExists(departmentId: string): Promise<boolean> {
+  const found = await db.department.findUnique({
+    where: { id: departmentId },
+    select: { id: true },
+  });
+  return found !== null;
 }
 
 /** Load the resource shape `authorize()` needs to make a decision. */
@@ -59,6 +97,8 @@ async function assignmentResource(id: string): Promise<Resource | null> {
 
 export async function createAssignment(_prev: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireViewer();
+  const throttled = writeLimit(viewer);
+  if (throttled) return throttled;
 
   const parsed = assignmentSchema.safeParse({
     title: formData.get("title") ?? "",
@@ -74,7 +114,16 @@ export async function createAssignment(_prev: FormState, formData: FormData): Pr
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
 
-  const assigneeIds = formData.getAll("assigneeIds").map(String).filter(Boolean);
+  const assigneeIds = await validAssigneeIds(
+    formData.getAll("assigneeIds").map(String).filter(Boolean),
+  );
+  if (assigneeIds === null) {
+    return { error: "One of the people picked is no longer on the team. Reload and try again." };
+  }
+
+  if (!(await departmentExists(d.departmentId))) {
+    return { error: "That department no longer exists." };
+  }
 
   assertCan(viewer, "create", {
     kind: "assignment",
@@ -86,6 +135,16 @@ export async function createAssignment(_prev: FormState, formData: FormData): Pr
   // Assigning work to somebody else is a Head/Admin action, not a Member one.
   if (assigneeIds.some((id) => id !== viewer.id)) {
     assertCan(viewer, "assign", {
+      kind: "assignment",
+      departmentId: d.departmentId,
+      createdById: viewer.id,
+      ownerIds: assigneeIds,
+    });
+  }
+
+  // Filing a task as already approved is the same privilege as approving one.
+  if (d.status === "APPROVED" || d.status === "DONE") {
+    assertCan(viewer, "approve", {
       kind: "assignment",
       departmentId: d.departmentId,
       createdById: viewer.id,
@@ -112,11 +171,14 @@ export async function createAssignment(_prev: FormState, formData: FormData): Pr
 
   revalidatePath("/assignments");
   revalidatePath("/dashboard");
-  return { ok: "Task created." };
+  redirect(`/assignments/${created.id}`);
 }
 
 export async function updateAssignment(_prev: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireViewer();
+  const throttled = writeLimit(viewer);
+  if (throttled) return throttled;
+
   const id = String(formData.get("id") ?? "");
 
   const resource = await assignmentResource(id);
@@ -137,7 +199,29 @@ export async function updateAssignment(_prev: FormState, formData: FormData): Pr
 
   assertCan(viewer, "update", resource);
 
-  const assigneeIds = formData.getAll("assigneeIds").map(String).filter(Boolean);
+  // Moving a task between departments is a create in the destination, not an
+  // edit in the source. Checking only "update" would let anyone who owns a task
+  // push it into a department they have no write access to — the form posts
+  // departmentId, and the browser decides what that value is.
+  if (resource.kind === "assignment" && d.departmentId !== resource.departmentId) {
+    if (!(await departmentExists(d.departmentId))) {
+      return { error: "That department no longer exists." };
+    }
+    assertCan(viewer, "create", {
+      kind: "assignment",
+      departmentId: d.departmentId,
+      createdById: viewer.id,
+      ownerIds: resource.ownerIds,
+    });
+  }
+
+  const assigneeIds = await validAssigneeIds(
+    formData.getAll("assigneeIds").map(String).filter(Boolean),
+  );
+  if (assigneeIds === null) {
+    return { error: "One of the people picked is no longer on the team. Reload and try again." };
+  }
+
   const current = resource.kind === "assignment" ? resource.ownerIds : [];
   const changed =
     assigneeIds.length !== current.length || assigneeIds.some((x) => !current.includes(x));
@@ -184,6 +268,10 @@ export async function updateAssignment(_prev: FormState, formData: FormData): Pr
 /** Board drag-and-drop and the quick status buttons both land here. */
 export async function setAssignmentStatus(id: string, status: AssignmentStatus): Promise<void> {
   const viewer = await requireViewer();
+  // A server action is a public HTTP endpoint: its arguments are as
+  // browser-supplied as any form body, TypeScript types notwithstanding.
+  if (!STATUSES.includes(status)) return;
+
   const resource = await assignmentResource(id);
   if (!resource) return;
 
@@ -250,6 +338,44 @@ export async function restoreAssignment(id: string): Promise<void> {
 // Comments (shared by assignments, documents, incidents)
 // ---------------------------------------------------------------------------
 
+/** Is there a thread here at all, and may this viewer read it? */
+async function canSeeCommentThread(
+  viewer: Viewer,
+  parentType: string,
+  parentId: string,
+): Promise<boolean> {
+  if (parentType === "assignment") {
+    const found = await db.assignment.findFirst({
+      where: { id: parentId, deletedAt: null },
+      select: { departmentId: true, createdById: true, assignees: { select: { userId: true } } },
+    });
+    if (!found) return false;
+    return can(viewer, "read", {
+      kind: "assignment",
+      departmentId: found.departmentId,
+      createdById: found.createdById,
+      ownerIds: found.assignees.map((a) => a.userId),
+    });
+  }
+
+  if (parentType === "document") {
+    const found = await db.document.findFirst({
+      where: { id: parentId, deletedAt: null },
+      select: { departmentId: true, ownerId: true },
+    });
+    if (!found) return false;
+    return can(viewer, "read", { kind: "document", ...found });
+  }
+
+  if (parentType === "incident") {
+    const found = await db.incident.findUnique({ where: { id: parentId }, select: { id: true } });
+    if (!found) return false;
+    return can(viewer, "read", { kind: "incident" });
+  }
+
+  return false;
+}
+
 export async function addComment(_prev: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireViewer();
   const parentType = String(formData.get("parentType") ?? "");
@@ -262,7 +388,17 @@ export async function addComment(_prev: FormState, formData: FormData): Promise<
     return { error: "Cannot comment on that." };
   }
 
+  const throttled = writeLimit(viewer);
+  if (throttled) return throttled;
+
   assertCan(viewer, "comment", { kind: "system" });
+
+  // Commenting writes to a thread the viewer must be allowed to see. The
+  // incident log is Admin-only, so without this a member could post into it —
+  // and, by whether the post succeeded, learn that an incident id exists.
+  if (!(await canSeeCommentThread(viewer, parentType, parentId))) {
+    return { error: "Cannot comment on that." };
+  }
 
   await db.comment.create({
     data: { parentType, parentId, userId: viewer.id, body },

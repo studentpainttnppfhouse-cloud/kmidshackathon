@@ -13,3 +13,9 @@ npm-debug.log*
 # Local-only scratch
 *-tmp.mjs
 *-tmp.mts
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

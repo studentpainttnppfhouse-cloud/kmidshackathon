@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireViewer, isAdmin } from "@/lib/authorize";
 import { EVENT_DAYS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/dates";
+import { isEventPanelVisible } from "@/lib/settings";
 import { CheckinButton, IncidentForm } from "@/components/event-widgets";
 import { Avatar, Banner, Card, EmptyState, SectionTitle } from "@/components/ui";
 
@@ -30,6 +32,12 @@ export default async function EventPage({
       : EVENT_DAYS[1];
 
   const admin = isAdmin(viewer);
+
+  // The panel can be switched off from the admin page while the run sheet is
+  // still empty. That hides the navigation link; this is what makes the URL
+  // behave the same way, so "hidden" is not just a missing button.
+  const panelVisible = await isEventPanelVisible();
+  if (!panelVisible && !admin) notFound();
 
   const [runSheet, myCheckin, checkedInCount, incidents, reserves] = await Promise.all([
     db.eventItem.findMany({
@@ -73,7 +81,7 @@ export default async function EventPage({
   const isLive = day === today && currentIndex !== -1;
 
   return (
-    <div className="space-y-5">
+    <div className="hs-enter space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="hs-eyebrow">Event-day mode</p>
@@ -85,7 +93,7 @@ export default async function EventPage({
               key={d}
               href={`/event?day=${d}`}
               className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-                day === d ? "bg-brand text-white" : "bg-white text-muted"
+                day === d ? "bg-brand text-white" : "bg-surface text-muted hover:text-pink-700"
               }`}
             >
               Day {i + 1}
@@ -93,6 +101,13 @@ export default async function EventPage({
           ))}
         </div>
       </header>
+
+      {!panelVisible ? (
+        <Banner tone="warn">
+          This panel is hidden from everybody except admins. Turn it on from the admin page when
+          the run sheet is ready.
+        </Banner>
+      ) : null}
 
       {day === today ? (
         <Banner tone="ok">Today is an event day. {checkedInCount} staff checked in right now.</Banner>

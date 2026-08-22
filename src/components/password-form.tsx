@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { changePassword } from "@/lib/actions/auth";
 import type { FormState } from "@/lib/actions/auth";
-import { SubmitButton } from "@/components/submit-button";
+import { Feedback, PasswordField, SubmitButton } from "@/components/form-bits";
 import { MIN_PASSWORD_LENGTH } from "@/lib/constants";
 
 const initial: FormState = {};
@@ -13,61 +13,32 @@ export function PasswordForm() {
 
   return (
     <form action={action} className="space-y-4">
-      <div>
-        <label className="hs-label" htmlFor="current">
-          Current password
-        </label>
-        <input
-          id="current"
-          name="current"
-          type="password"
-          required
-          autoComplete="current-password"
-          className="hs-input"
+      <PasswordField
+        id="current"
+        name="current"
+        label="Current password"
+        autoComplete="current-password"
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <PasswordField
+          id="new-password"
+          name="password"
+          label="New password"
+          autoComplete="new-password"
+          minLength={MIN_PASSWORD_LENGTH}
+          hint={`At least ${MIN_PASSWORD_LENGTH} characters. A phrase you will remember beats a short one you will not.`}
+        />
+        <PasswordField
+          id="confirm-password"
+          name="confirm"
+          label="Confirm"
+          autoComplete="new-password"
+          minLength={MIN_PASSWORD_LENGTH}
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="hs-label" htmlFor="new-password">
-            New password
-          </label>
-          <input
-            id="new-password"
-            name="password"
-            type="password"
-            required
-            minLength={MIN_PASSWORD_LENGTH}
-            autoComplete="new-password"
-            className="hs-input"
-          />
-        </div>
-        <div>
-          <label className="hs-label" htmlFor="confirm-password">
-            Confirm
-          </label>
-          <input
-            id="confirm-password"
-            name="confirm"
-            type="password"
-            required
-            minLength={MIN_PASSWORD_LENGTH}
-            autoComplete="new-password"
-            className="hs-input"
-          />
-        </div>
-      </div>
-
-      {state.error ? (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      ) : null}
-      {state.ok ? (
-        <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {state.ok}
-        </p>
-      ) : null}
+      <Feedback state={state} />
 
       <SubmitButton className="hs-btn hs-btn-secondary" pendingLabel="Saving…">
         Change password

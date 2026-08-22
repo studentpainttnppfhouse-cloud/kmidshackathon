@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { createAssignment, updateAssignment } from "@/lib/actions/assignments";
 import type { FormState } from "@/lib/actions/auth";
-import { SubmitButton } from "@/components/submit-button";
+import { Feedback, SubmitButton } from "@/components/form-bits";
 import { PRIORITY_LABEL, STATUS_LABEL, STATUS_ORDER } from "@/lib/constants";
 import { toDateInput } from "@/lib/dates";
 import type { AssignmentStatus, Priority } from "@prisma/client";
@@ -19,11 +19,15 @@ export function AssignmentForm({
   canAssignOthers,
   canApprove,
   assignment,
+  defaultDepartmentId,
+  defaultAssigneeIds = [],
 }: {
   departments: PickerDept[];
   people: PickerUser[];
   canAssignOthers: boolean;
   canApprove: boolean;
+  defaultDepartmentId?: string;
+  defaultAssigneeIds?: string[];
   assignment?: {
     id: string;
     title: string;
@@ -83,7 +87,7 @@ export function AssignmentForm({
             id="departmentId"
             name="departmentId"
             required
-            defaultValue={assignment?.departmentId ?? departments[0]?.id ?? ""}
+            defaultValue={assignment?.departmentId ?? defaultDepartmentId ?? departments[0]?.id ?? ""}
             className="hs-input"
           >
             {departments.map((d) => (
@@ -162,7 +166,11 @@ export function AssignmentForm({
                   type="checkbox"
                   name="assigneeIds"
                   value={p.id}
-                  defaultChecked={assignment?.assigneeIds.includes(p.id)}
+                  defaultChecked={
+                    assignment
+                      ? assignment.assigneeIds.includes(p.id)
+                      : defaultAssigneeIds.includes(p.id)
+                  }
                   className="accent-pink-500"
                 />
                 <span className="truncate">{p.nickname || p.name}</span>
@@ -170,10 +178,17 @@ export function AssignmentForm({
             ))}
           </div>
         ) : (
-          <p className="rounded-[10px] bg-pink-50 px-3 py-2.5 text-sm text-muted">
-            Members can only create tasks for themselves. Ask your head to
-            reassign it.
-          </p>
+          <>
+            {/* A member files work for themselves. The checkbox grid is not
+                shown, so the ownership still has to be posted — otherwise the
+                task lands with nobody on it. */}
+            {people.slice(0, 1).map((p) => (
+              <input key={p.id} type="hidden" name="assigneeIds" value={p.id} />
+            ))}
+            <p className="rounded-[10px] bg-pink-50 px-3 py-2.5 text-sm text-muted">
+              Members file tasks for themselves. Ask your head to reassign it to somebody else.
+            </p>
+          </>
         )}
       </fieldset>
 
@@ -206,16 +221,7 @@ export function AssignmentForm({
         </div>
       </div>
 
-      {state.error ? (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      ) : null}
-      {state.ok ? (
-        <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {state.ok}
-        </p>
-      ) : null}
+      <Feedback state={state} />
 
       <SubmitButton className="hs-btn hs-btn-primary" pendingLabel="Saving…">
         {assignment ? "Save changes" : "Create task"}
