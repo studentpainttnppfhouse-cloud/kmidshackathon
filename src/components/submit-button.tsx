@@ -1,20 +1,6 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
-
-export function SubmitButton({
-  children,
-  pendingLabel,
-  className = "hs-btn hs-btn-primary w-full",
-}: {
-  children: React.ReactNode;
-  pendingLabel?: string;
-  className?: string;
-}) {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" className={className} disabled={pending} aria-busy={pending}>
-      {pending ? (pendingLabel ?? "Working…") : children}
-    </button>
-  );
-}
+// Kept as its own module because a dozen forms import it from here. The
+// implementation — including the pending spinner — now lives with the rest of
+// the shared form parts.
+export { SubmitButton } from "@/components/form-bits";

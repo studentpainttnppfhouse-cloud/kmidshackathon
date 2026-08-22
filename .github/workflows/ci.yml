@@ -1,0 +1,71 @@
+name: CI
+
+# Types, tests and a dependency scan on every push and pull request.
+#
+# The dependency scan is the part that is easy to skip and expensive to have
+# skipped: a portal with one maintainer will not notice a CVE in a transitive
+# package on its own, and "we would have upgraded if we had known" is not a
+# security posture. It runs weekly as well as on every change, because a new
+# advisory can land against code nobody has touched for a month.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    # Mondays, 01:00 UTC — Monday morning in Bangkok.
+    - cron: "0 1 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # The Prisma client is generated code; nothing typechecks without it.
+      - run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # The build does not connect, but Prisma wants the variable present.
+          DATABASE_URL: "mysql://user:pass@localhost:3306/build_only"
+
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Runtime dependencies are the ones an attacker can reach. A high or
+      # critical advisory here fails the build.
+      - name: Audit runtime dependencies
+        run: npm audit --audit-level=high --omit=dev
+
+      # Dev-only advisories are reported but do not fail: they affect a
+      # laptop running `next dev`, not the deployed portal, and blocking a
+      # release on one means the next real finding gets ignored too.
+      - name: Audit dev dependencies (advisory only)
+        run: npm audit --audit-level=moderate || true

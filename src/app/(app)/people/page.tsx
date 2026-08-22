@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import { requireViewer } from "@/lib/authorize";
-import { Avatar, Card, Divider, EmptyState, SectionTitle, TierPill } from "@/components/ui";
+import { requireViewer, can } from "@/lib/authorize";
+import { Avatar, Card, Divider, EmptyState, PageHeader, SectionTitle, TierPill } from "@/components/ui";
 
 export const metadata: Metadata = { title: "People" };
 export const dynamic = "force-dynamic";
@@ -12,8 +12,9 @@ export default async function PeoplePage({
 }: {
   searchParams: Promise<{ q?: string; dept?: string }>;
 }) {
-  await requireViewer();
+  const viewer = await requireViewer();
   const { q, dept } = await searchParams;
+  const canImport = can(viewer, "manage_users", { kind: "user", userId: viewer.id });
 
   const [departments, people] = await Promise.all([
     db.department.findMany({
@@ -47,16 +48,25 @@ export default async function PeoplePage({
   ]);
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="hs-eyebrow">People</p>
-        <h1 className="hs-h1">Directory & org chart</h1>
-      </header>
+    <div className="hs-enter space-y-6">
+      <PageHeader
+        eyebrow="People"
+        title="Directory & org chart"
+        subtitle="Who is on the team, which department they are in, and who leads it."
+        action={
+          canImport ? (
+            <Link href="/people/import" className="hs-btn hs-btn-primary">
+              <span aria-hidden="true">＋</span> Import people
+            </Link>
+          ) : null
+        }
+      />
 
       <form className="flex flex-wrap gap-2">
         <input
           name="q"
           defaultValue={q ?? ""}
+          type="search"
           placeholder="Search a name or role…"
           className="hs-input max-w-xs"
           aria-label="Search people"
@@ -82,7 +92,7 @@ export default async function PeoplePage({
             <Link
               key={p.id}
               href={`/people/${p.id}`}
-              className="hs-card flex items-center gap-3 p-4 transition hover:border-pink-300"
+              className="hs-card flex items-center gap-3 p-4"
             >
               <Avatar name={p.name} nickname={p.nickname} url={p.avatarUrl} size={44} />
               <span className="min-w-0">

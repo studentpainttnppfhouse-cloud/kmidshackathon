@@ -187,14 +187,12 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
               <ul className="space-y-2">
                 {documents.map((doc) => (
                   <li key={doc.id} className="flex items-center justify-between gap-3">
-                    <a
-                      href={doc.externalUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
+                    <Link
+                      href={`/documents/${doc.id}`}
                       className="min-w-0 flex-1 truncate text-sm font-semibold text-ink hover:text-pink-700"
                     >
-                      {doc.title} ↗
-                    </a>
+                      {doc.title}
+                    </Link>
                     <DocStatusPill status={doc.status} />
                   </li>
                 ))}

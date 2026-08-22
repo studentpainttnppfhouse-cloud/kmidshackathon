@@ -81,3 +81,43 @@ matter: cross-department writes, members approving their own work, heads
 broadcasting to all staff, alumni write attempts, and signed-out access. When a
 rule changes, the test changes with it — that is the point of keeping the policy
 free of I/O.
+
+
+---
+
+## Where the rules are enforced
+
+`src/lib/policy.ts` is the only module that decides anything. Everything else
+is a caller:
+
+| Caller | What it does |
+| --- | --- |
+| `requireViewer()` | signed in, or redirect to `/login` |
+| `requireTier(tier)` | at least this tier, or bounce with `?denied=1` |
+| `assertCan(...)` | throws in a server action, where a redirect would be swallowed |
+| `can(...)` | the plain predicate — used by pages to filter lists and hide controls |
+
+Three habits keep this honest, and all three are load-bearing:
+
+1. **Index pages filter through `can()`, not through the `WHERE` clause.** A
+   query that hard-codes a department is a second copy of the rules that will
+   drift from the first.
+2. **Detail pages re-check for themselves.** Reaching `/documents/<id>`
+   directly must not depend on an index having filtered it out. Where the
+   viewer may not read it, the answer is `404` — a `403` confirms it exists.
+3. **A hidden control is not a permission.** The Event Day panel can be hidden
+   from the navigation; `/event` still checks who is asking, because anybody who
+   visited it once has the URL.
+
+## What a server action re-checks
+
+A server action is a public HTTP endpoint. Its TypeScript signature is a
+compile-time claim about arguments that arrive over the wire, so every action
+re-derives:
+
+- enum arguments against their allowlist (`status`, `tier`, flag names)
+- that referenced rows exist and are not soft-deleted
+- that ids in a form body belong to real, active accounts
+- that a department change is permitted **in the destination**, not just the
+  source
+- that the actor's tier is at least the tier being granted, in both directions

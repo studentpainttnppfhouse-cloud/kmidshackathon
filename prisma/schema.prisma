@@ -62,11 +62,11 @@ model User {
 
   department Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  headOf            Department[]       @relation("DepartmentHead")
+  headOf            Department[]         @relation("DepartmentHead")
   sessions          Session[]
   passwordResets    PasswordReset[]
-  invitesSent       Invite[]           @relation("InviteInvitedBy")
-  assignmentsMade   Assignment[]       @relation("AssignmentCreatedBy")
+  invitesSent       Invite[]             @relation("InviteInvitedBy")
+  assignmentsMade   Assignment[]         @relation("AssignmentCreatedBy")
   assignmentsOwned  AssignmentAssignee[]
   comments          Comment[]
   documents         Document[]
@@ -91,15 +91,15 @@ model User {
 /// or even a rotated AUTH_SECRET — cannot log anybody out. This is what makes
 /// "sign in once" true across updates.
 model Session {
-  id        String    @id @default(cuid())
-  userId    String
-  tokenHash String    @unique @db.VarChar(64)
-  expiresAt DateTime
-  createdAt DateTime  @default(now())
-  lastSeenAt DateTime @default(now())
-  userAgent String?   @db.Text
-  ip        String?
-  revokedAt DateTime?
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique @db.VarChar(64)
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  userAgent  String?   @db.Text
+  ip         String?
+  revokedAt  DateTime?
 
   user User @relation(fields: [userId], references: [id])
 
@@ -273,13 +273,23 @@ enum DocStatus {
   PUBLISHED
 }
 
+/// A document is either a link to something in Google Drive, or a document
+/// written in the portal itself. `source` says which, and exactly one of
+/// `externalUrl` / `body` is meaningful for a given row.
 model Document {
   id           String    @id @default(cuid())
   title        String
   description  String?   @db.Text
   departmentId String
   ownerId      String
-  externalUrl  String    @db.Text
+  /// Set for source = "external". Null for documents written in the portal.
+  externalUrl  String?   @db.Text
+  /// "external" (a Drive link) or "portal" (written here, body below).
+  source       String    @default("external") @db.VarChar(16)
+  /// Markdown body for source = "portal". Never rendered as raw HTML.
+  body         String?   @db.LongText
+  /// Optional attachment to a task, so a submission is the document itself.
+  assignmentId String?
   status       DocStatus @default(DRAFT)
   approvedById String?
   approvedAt   DateTime?
@@ -297,6 +307,7 @@ model Document {
   @@index([ownerId])
   @@index([status])
   @@index([year])
+  @@index([assignmentId])
   @@map("documents")
 }
 
@@ -415,16 +426,16 @@ model AnnouncementRead {
 // ---------------------------------------------------------------------------
 
 model EventItem {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   day       String
   startTime String
   endTime   String?
   title     String
   location  String?
-  notes     String?  @db.Text
+  notes     String? @db.Text
   ownerId   String?
-  sortOrder Int      @default(0)
-  year      Int      @default(2027)
+  sortOrder Int     @default(0)
+  year      Int     @default(2027)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -484,6 +495,32 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_log")
+}
+
+/// The brand kit, as data rather than a hard-coded array.
+///
+/// Colours and fonts were a constant in the source, which meant every tweak was
+/// a redeploy and nobody outside the repository could make one. They live here
+/// so a T3 can add the twentieth shade of pink from the portal itself, and so
+/// the Brand Kit export has something real to read.
+model BrandToken {
+  id          String   @id @default(cuid())
+  /// "color" or "font".
+  kind        String   @default("color") @db.VarChar(16)
+  name        String
+  /// A #RRGGBB hex for a colour; a CSS font stack for a font.
+  value       String   @db.Text
+  /// Free-text grouping — "Primary", "Neutrals", "Headings".
+  groupName   String?  @db.VarChar(60)
+  note        String?  @db.Text
+  sortOrder   Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([kind])
+  @@index([sortOrder])
+  @@map("brand_tokens")
 }
 
 /// Single-row key/value table for portal-wide switches (archive mode,

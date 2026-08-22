@@ -6,6 +6,7 @@ import { requireViewer, isAdmin } from "@/lib/authorize";
 import { AssignmentRow, type AssignmentSummary } from "@/components/assignment-row";
 import { Avatar, Card, DocStatusPill, EmptyState, SectionTitle, TierPill } from "@/components/ui";
 import { formatDateLong } from "@/lib/dates";
+import { decryptField } from "@/lib/crypto";
 
 export const metadata: Metadata = { title: "Profile" };
 export const dynamic = "force-dynamic";
@@ -14,9 +15,33 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   const viewer = await requireViewer();
   const { id } = await params;
 
+  // Columns, not `include: everything`. A server component that selects the
+  // whole row is one accidental prop away from serialising `passwordHash` into
+  // the page payload; naming the fields makes that impossible rather than
+  // unlikely.
   const person = await db.user.findUnique({
     where: { id },
-    include: { department: true },
+    select: {
+      id: true,
+      name: true,
+      nickname: true,
+      email: true,
+      grade: true,
+      phone: true,
+      lineId: true,
+      shirtSize: true,
+      roleTitle: true,
+      avatarUrl: true,
+      tier: true,
+      isReserve: true,
+      isMentor: true,
+      isAlumni: true,
+      isActive: true,
+      deletedAt: true,
+      createdAt: true,
+      lastLoginAt: true,
+      department: { select: { name: true, color: true, slug: true } },
+    },
   });
 
   if (!person || person.deletedAt) notFound();
@@ -91,11 +116,11 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             <>
               <div>
                 <dt className="hs-eyebrow">Phone</dt>
-                <dd className="mt-0.5 font-semibold text-ink">{person.phone ?? "—"}</dd>
+                <dd className="mt-0.5 font-semibold text-ink">{decryptField(person.phone) ?? "—"}</dd>
               </div>
               <div>
                 <dt className="hs-eyebrow">LINE</dt>
-                <dd className="mt-0.5 font-semibold text-ink">{person.lineId ?? "—"}</dd>
+                <dd className="mt-0.5 font-semibold text-ink">{decryptField(person.lineId) ?? "—"}</dd>
               </div>
             </>
           ) : (
@@ -135,14 +160,12 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
           <ul className="space-y-2">
             {documents.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3">
-                <a
-                  href={d.externalUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
+                <Link
+                  href={`/documents/${d.id}`}
                   className="truncate text-sm font-semibold text-ink hover:text-pink-700"
                 >
-                  {d.title} ↗
-                </a>
+                  {d.title}
+                </Link>
                 <DocStatusPill status={d.status} />
               </li>
             ))}

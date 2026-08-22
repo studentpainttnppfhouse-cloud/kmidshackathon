@@ -6,6 +6,7 @@ import { ProfileForm } from "@/components/profile-form";
 import { PasswordForm } from "@/components/password-form";
 import { Banner, Card, SectionTitle, TierPill } from "@/components/ui";
 import { formatDateLong, timeAgo } from "@/lib/dates";
+import { decryptField } from "@/lib/crypto";
 
 export const metadata: Metadata = { title: "Settings" };
 export const dynamic = "force-dynamic";
@@ -35,8 +36,8 @@ export default async function SettingsPage() {
           defaults={{
             nickname: viewer.nickname,
             grade: viewer.grade,
-            phone: viewer.phone,
-            lineId: viewer.lineId,
+            phone: decryptField(viewer.phone),
+            lineId: decryptField(viewer.lineId),
             shirtSize: viewer.shirtSize,
             roleTitle: viewer.roleTitle,
             avatarUrl: viewer.avatarUrl,

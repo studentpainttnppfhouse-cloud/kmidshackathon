@@ -16,7 +16,9 @@
     "db:bootstrap": "tsx scripts/db-bootstrap.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "tsx scripts/prisma.ts studio",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --conditions=react-server --test tests/*.test.ts",
+    "test:e2e": "playwright test tests/e2e",
+    "audit": "npm audit --audit-level=high --omit=dev"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -24,7 +26,7 @@
   "dependencies": {
     "@prisma/client": "6.2.1",
     "bcryptjs": "2.4.3",
-    "next": "15.5.23",
+    "next": "^16.3.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "server-only": "^0.0.1",

@@ -4,11 +4,15 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { assertCan, requireViewer, isAdmin, isOwner } from "@/lib/authorize";
+import { assertCan, requireViewer, isAdmin } from "@/lib/authorize";
 import { emailSchema, generateCode } from "@/lib/auth";
-import { INVITE_TTL_DAYS, RESET_TTL_HOURS } from "@/lib/constants";
+import { INVITE_TTL_DAYS, RESET_TTL_HOURS, TIER_ORDER } from "@/lib/constants";
+import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/actions/auth";
 import type { Tier } from "@prisma/client";
+
+const USER_FLAGS = ["isReserve", "isMentor", "isAlumni", "isActive"] as const;
+type UserFlag = (typeof USER_FLAGS)[number];
 
 const TIERS = [
   "T0_ADVISOR",
@@ -34,6 +38,9 @@ export async function createInvite(_prev: FormState, formData: FormData): Promis
   const viewer = await requireViewer();
   assertCan(viewer, "manage_users", { kind: "user", userId: viewer.id });
 
+  const limit = rateLimit(`write:${viewer.id}`, RULES.write);
+  if (!limit.ok) return { error: retryMessage(limit.retryAfter) };
+
   const parsed = inviteSchema.safeParse({
     email: formData.get("email") ?? "",
     name: formData.get("name") ?? "",
@@ -44,9 +51,19 @@ export async function createInvite(_prev: FormState, formData: FormData): Promis
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
 
-  // Nobody hands out a tier above their own.
-  if (d.tier === "T4_OWNER" && !isOwner(viewer)) {
-    return { error: "Only an owner can create another owner." };
+  // Nobody hands out a tier above their own. Stated as an ordering rather than
+  // a special case for T4, so a tier added later cannot be escalated into by an
+  // admin who happens to be below it.
+  if (TIER_ORDER[d.tier] > TIER_ORDER[viewer.tier]) {
+    return { error: "You cannot invite somebody at a higher tier than your own." };
+  }
+
+  if (d.departmentId) {
+    const department = await db.department.findUnique({
+      where: { id: d.departmentId },
+      select: { id: true },
+    });
+    if (!department) return { error: "That department no longer exists." };
   }
 
   const existing = await db.user.findUnique({ where: { email: d.email } });
@@ -76,7 +93,12 @@ export async function revokeInvite(id: string): Promise<void> {
   const viewer = await requireViewer();
   assertCan(viewer, "manage_users", { kind: "user", userId: viewer.id });
 
-  await db.invite.update({ where: { id }, data: { revokedAt: new Date() } });
+  // updateMany, not update: an id that matches nothing is a no-op rather than
+  // a thrown P2025 that surfaces as a 500 page.
+  await db.invite.updateMany({
+    where: { id, revokedAt: null, acceptedAt: null },
+    data: { revokedAt: new Date() },
+  });
   await audit(viewer.id, "invite.revoked", { type: "invite", id });
   revalidatePath("/admin");
 }
@@ -89,8 +111,19 @@ export async function setUserTier(userId: string, tier: Tier): Promise<void> {
   const viewer = await requireViewer();
   assertCan(viewer, "manage_users", { kind: "user", userId });
 
-  if (tier === "T4_OWNER" && !isOwner(viewer)) return;
+  // A server action argument is browser input. `tier: Tier` is a compile-time
+  // claim; this is the run-time one.
+  if (!(tier in TIER_ORDER)) return;
+
+  // Granting a tier you do not hold yourself is privilege escalation whichever
+  // direction it comes from.
+  if (TIER_ORDER[tier] > TIER_ORDER[viewer.tier]) return;
   if (userId === viewer.id) return; // no self-demotion locking you out
+
+  const target = await db.user.findUnique({ where: { id: userId }, select: { tier: true } });
+  if (!target) return;
+  // Nor may an admin demote somebody above them and take the account over.
+  if (TIER_ORDER[target.tier] > TIER_ORDER[viewer.tier]) return;
 
   await db.user.update({ where: { id: userId }, data: { tier } });
   await audit(viewer.id, "user.tier.changed", { type: "user", id: userId, detail: tier });
@@ -101,6 +134,14 @@ export async function setUserDepartment(userId: string, departmentId: string): P
   const viewer = await requireViewer();
   assertCan(viewer, "manage_departments", { kind: "user", userId });
 
+  if (departmentId) {
+    const department = await db.department.findUnique({
+      where: { id: departmentId },
+      select: { id: true },
+    });
+    if (!department) return;
+  }
+
   await db.user.update({
     where: { id: userId },
     data: { departmentId: departmentId || null },
@@ -109,15 +150,21 @@ export async function setUserDepartment(userId: string, departmentId: string): P
   revalidatePath("/admin");
 }
 
-export async function setUserFlag(
-  userId: string,
-  flag: "isReserve" | "isMentor" | "isAlumni" | "isActive",
-  value: boolean,
-): Promise<void> {
+export async function setUserFlag(userId: string, flag: UserFlag, value: boolean): Promise<void> {
   const viewer = await requireViewer();
   assertCan(viewer, "manage_users", { kind: "user", userId });
 
+  // `flag` is used as an object key in the update payload, so it decides which
+  // column gets written. The type says it is one of four; this says so at run
+  // time, where the value actually arrives from a POST body.
+  if (!USER_FLAGS.includes(flag)) return;
+  if (typeof value !== "boolean") return;
+
   if (userId === viewer.id && flag === "isActive" && !value) return;
+
+  const target = await db.user.findUnique({ where: { id: userId }, select: { tier: true } });
+  if (!target) return;
+  if (TIER_ORDER[target.tier] > TIER_ORDER[viewer.tier]) return;
 
   await db.user.update({ where: { id: userId }, data: { [flag]: value } });
   await audit(viewer.id, `user.${flag}`, { type: "user", id: userId, detail: String(value) });
@@ -145,6 +192,12 @@ export async function unlockUser(userId: string): Promise<void> {
 export async function issuePasswordReset(userId: string): Promise<void> {
   const viewer = await requireViewer();
   assertCan(viewer, "manage_users", { kind: "user", userId });
+
+  const target = await db.user.findUnique({ where: { id: userId }, select: { tier: true } });
+  if (!target) return;
+  // A reset link is a way into an account. Nobody issues one for a tier above
+  // their own.
+  if (TIER_ORDER[target.tier] > TIER_ORDER[viewer.tier]) return;
 
   await db.passwordReset.updateMany({
     where: { userId, usedAt: null },
@@ -232,6 +285,14 @@ export async function upsertDepartment(_prev: FormState, formData: FormData): Pr
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
 
+  if (d.headUserId) {
+    const head = await db.user.findFirst({
+      where: { id: d.headUserId, deletedAt: null, isActive: true },
+      select: { id: true },
+    });
+    if (!head) return { error: "That person is not on the team any more." };
+  }
+
   const data = {
     name: d.name,
     slug: d.slug,
@@ -287,6 +348,7 @@ export async function restoreDeleted(
 ): Promise<void> {
   const viewer = await requireViewer();
   if (!isAdmin(viewer)) return;
+  if (!["assignment", "document", "file", "announcement"].includes(type)) return;
 
   const data = { deletedAt: null };
   if (type === "assignment") await db.assignment.update({ where: { id }, data });

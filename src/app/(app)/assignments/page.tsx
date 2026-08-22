@@ -1,9 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import { requireViewer, isAdmin, can } from "@/lib/authorize";
-import { Card, SectionTitle } from "@/components/ui";
-import { AssignmentForm } from "@/components/assignment-form";
+import { requireViewer, can } from "@/lib/authorize";
+import { PageHeader } from "@/components/ui";
 import { BoardView, CalendarView, ListView } from "./views";
 import type { AssignmentSummary } from "@/components/assignment-row";
 import type { Prisma } from "@prisma/client";
@@ -44,7 +43,7 @@ export default async function AssignmentsPage({
     where.status = { notIn: ["DONE", "APPROVED"] };
   }
 
-  const [items, departments, people] = await Promise.all([
+  const [items, departments] = await Promise.all([
     db.assignment.findMany({
       where,
       include,
@@ -52,14 +51,19 @@ export default async function AssignmentsPage({
       take: 400,
     }),
     db.department.findMany({ orderBy: { sortOrder: "asc" } }),
-    db.user.findMany({
-      where: { deletedAt: null, isActive: true },
-      select: { id: true, name: true, nickname: true },
-      orderBy: { name: "asc" },
-    }),
   ]);
 
-  const summaries = items as AssignmentSummary[];
+  // Even a read-mostly portal filters its lists through the policy rather than
+  // trusting the query: `can()` is the single place the rules live, and a page
+  // that skips it is a page that will not follow the rules when they change.
+  const summaries = items.filter((a) =>
+    can(viewer, "read", {
+      kind: "assignment",
+      departmentId: a.departmentId,
+      createdById: a.createdById,
+      ownerIds: a.assignees.map((x) => x.user.id),
+    }),
+  ) as AssignmentSummary[];
 
   // Which departments may this person file a task into?
   const creatable = departments.filter((d) =>
@@ -70,19 +74,6 @@ export default async function AssignmentsPage({
       ownerIds: [viewer.id],
     }),
   );
-
-  const canAssignOthers =
-    isAdmin(viewer) ||
-    departments.some((d) =>
-      can(viewer, "assign", {
-        kind: "assignment",
-        departmentId: d.id,
-        createdById: viewer.id,
-        ownerIds: [],
-      }),
-    );
-
-  const canApprove = canAssignOthers;
 
   const month = sp.month ? new Date(`${sp.month}-01T00:00:00+07:00`) : new Date();
 
@@ -96,7 +87,7 @@ export default async function AssignmentsPage({
         href={`/assignments?${params}`}
         aria-current={view === v ? "page" : undefined}
         className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-          view === v ? "bg-brand text-white" : "bg-white text-muted hover:text-pink-700"
+          view === v ? "bg-brand text-white" : "bg-surface text-muted hover:text-pink-700"
         }`}
       >
         {label}
@@ -105,27 +96,34 @@ export default async function AssignmentsPage({
   };
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="hs-eyebrow">Assignments</p>
-          <h1 className="hs-h1">
-            {view === "mine" ? "My tasks" : "Everything the team owes"}
-          </h1>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {tab("board", "Board")}
-          {tab("list", "List")}
-          {tab("calendar", "Calendar")}
-          {tab("mine", "My tasks")}
-        </div>
-      </header>
+    <div className="hs-enter space-y-5">
+      <PageHeader
+        eyebrow="Assignments"
+        title={view === "mine" ? "My tasks" : "Everything the team owes"}
+        action={
+          creatable.length > 0 ? (
+            <Link
+              href={sp.dept ? `/assignments/new?dept=${encodeURIComponent(sp.dept)}` : "/assignments/new"}
+              className="hs-btn hs-btn-primary"
+            >
+              <span aria-hidden="true">＋</span> New task
+            </Link>
+          ) : null
+        }
+      />
+
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="How to view the tasks">
+        {tab("board", "Board")}
+        {tab("list", "List")}
+        {tab("calendar", "Calendar")}
+        {tab("mine", "My tasks")}
+      </div>
 
       <div className="flex flex-wrap gap-1.5">
         <Link
           href={`/assignments?view=${view}`}
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            !sp.dept ? "bg-pink-100 text-pink-700" : "bg-white text-muted"
+            !sp.dept ? "bg-pink-100 text-pink-700" : "bg-surface text-muted hover:text-pink-700"
           }`}
         >
           All departments
@@ -135,7 +133,7 @@ export default async function AssignmentsPage({
             key={d.id}
             href={`/assignments?view=${view}&dept=${d.slug}`}
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              sp.dept === d.slug ? "bg-pink-100 text-pink-700" : "bg-white text-muted"
+              sp.dept === d.slug ? "bg-pink-100 text-pink-700" : "bg-surface text-muted hover:text-pink-700"
             }`}
           >
             {d.name}
@@ -147,17 +145,6 @@ export default async function AssignmentsPage({
       {view === "list" || view === "mine" ? <ListView items={summaries} /> : null}
       {view === "calendar" ? <CalendarView items={summaries} month={month} /> : null}
 
-      {creatable.length > 0 ? (
-        <Card>
-          <SectionTitle>New task</SectionTitle>
-          <AssignmentForm
-            departments={creatable.map((d) => ({ id: d.id, name: d.name }))}
-            people={canAssignOthers ? people : [{ id: viewer.id, name: viewer.name, nickname: viewer.nickname }]}
-            canAssignOthers={canAssignOthers}
-            canApprove={canApprove}
-          />
-        </Card>
-      ) : null}
     </div>
   );
 }

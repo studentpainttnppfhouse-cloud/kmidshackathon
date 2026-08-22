@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/session";
 import { Logo } from "@/components/brand";
 import { Ecg } from "@/components/ui";
 import { ProfileForm } from "@/components/profile-form";
+import { decryptField } from "@/lib/crypto";
 
 export const metadata: Metadata = { title: "Welcome" };
 
@@ -33,8 +34,8 @@ export default async function WelcomePage() {
             defaults={{
               nickname: viewer.nickname,
               grade: viewer.grade,
-              phone: viewer.phone,
-              lineId: viewer.lineId,
+              phone: decryptField(viewer.phone),
+              lineId: decryptField(viewer.lineId),
               shirtSize: viewer.shirtSize,
               roleTitle: viewer.roleTitle,
               avatarUrl: viewer.avatarUrl,

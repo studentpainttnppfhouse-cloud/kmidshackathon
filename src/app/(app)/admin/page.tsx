@@ -15,7 +15,9 @@ import {
   InviteForm,
   TierSelect,
 } from "@/components/admin-widgets";
-import { Avatar, Banner, Card, EmptyState, SectionTitle, Stat } from "@/components/ui";
+import { setEventPanelVisible } from "@/lib/actions/brand";
+import { SETTING_KEYS, getSettings } from "@/lib/settings";
+import { Avatar, Banner, Card, EmptyState, PageHeader, SectionTitle, Stat } from "@/components/ui";
 import { formatDateLong, timeAgo } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Admin" };
@@ -25,7 +27,7 @@ export default async function AdminPage() {
   const viewer = await requireTier("T3_ADMIN");
   const owner = isOwner(viewer);
 
-  const [users, invites, departments, resets, sessionCount, deletedCounts] = await Promise.all([
+  const [users, invites, departments, resets, sessionCount, deletedCounts, settings] = await Promise.all([
     db.user.findMany({
       where: { deletedAt: null },
       include: {
@@ -54,17 +56,27 @@ export default async function AdminPage() {
       db.document.count({ where: { deletedAt: { not: null } } }),
       db.fileAsset.count({ where: { deletedAt: { not: null } } }),
     ]),
+    getSettings([SETTING_KEYS.eventPanel]),
   ]);
+
+  const eventVisible = settings[SETTING_KEYS.eventPanel] === "1";
 
   const lockedOut = users.filter((u) => u.lockedUntil && u.lockedUntil.getTime() > Date.now());
   const recycleBin = deletedCounts.reduce((a, b) => a + b, 0);
 
   return (
-    <div className="space-y-5">
-      <header>
-        <p className="hs-eyebrow">Administration</p>
-        <h1 className="hs-h1">Accounts, invites & access</h1>
-      </header>
+    <div className="hs-enter space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Accounts, invites & access"
+        action={
+          owner ? (
+            <Link href="/people/import" className="hs-btn hs-btn-primary">
+              <span aria-hidden="true">＋</span> Import people
+            </Link>
+          ) : null
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Active staff" value={users.filter((u) => u.isActive).length} />
@@ -101,7 +113,7 @@ export default async function AdminPage() {
             {invites.map((inv) => (
               <li
                 key={inv.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f3e3ec] p-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
               >
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-ink">{inv.email}</p>
@@ -155,12 +167,43 @@ export default async function AdminPage() {
       ) : null}
 
       <Card>
+        <SectionTitle>Portal panels</SectionTitle>
+        <p className="mb-4 -mt-2 text-sm text-muted">
+          Turn a section off while it is empty. Hiding a panel takes it out of everybody&rsquo;s
+          navigation — it is a tidiness switch, not a permission: the pages behind it still check
+          who is asking, and admins keep the link so there is a way back here.
+        </p>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-ink">Event Day</p>
+            <p className="text-xs text-muted">
+              Run sheet, check-in and the incident log. Worth hiding until the week of the event.
+            </p>
+          </div>
+          <form
+            action={async () => {
+              "use server";
+              await setEventPanelVisible(!eventVisible);
+            }}
+          >
+            <button
+              type="submit"
+              className={`hs-btn px-3 py-1.5 text-xs ${eventVisible ? "hs-btn-ghost" : "hs-btn-primary"}`}
+            >
+              {eventVisible ? "Hide the panel" : "Show the panel"}
+            </button>
+          </form>
+        </div>
+      </Card>
+
+      <Card>
         <SectionTitle>Users</SectionTitle>
         <div className="space-y-2">
           {users.map((u) => {
             const locked = u.lockedUntil && u.lockedUntil.getTime() > Date.now();
             return (
-              <div key={u.id} className="rounded-xl border border-[#f3e3ec] p-3">
+              <div key={u.id} className="rounded-xl border border-line p-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <Avatar name={u.name} nickname={u.nickname} url={u.avatarUrl} size={36} />
                   <div className="min-w-0 flex-1">
@@ -194,7 +237,7 @@ export default async function AdminPage() {
                   />
                 </div>
 
-                <div className="mt-2.5 flex flex-wrap items-center gap-4 border-t border-[#f8eef3] pt-2.5">
+                <div className="mt-2.5 flex flex-wrap items-center gap-4 border-t border-line pt-2.5">
                   <FlagToggle userId={u.id} flag="isActive" value={u.isActive} label="Active" />
                   <FlagToggle userId={u.id} flag="isReserve" value={u.isReserve} label="Reserve" />
                   <FlagToggle userId={u.id} flag="isMentor" value={u.isMentor} label="Mentor" />

@@ -1,11 +1,13 @@
 import "server-only";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { SESSION_COOKIE, SESSION_TTL_DAYS } from "@/lib/constants";
 import type { Viewer } from "@/lib/policy";
 
 export type { Viewer };
+// One constant-time compare for the whole codebase; see src/lib/crypto.ts.
+export { safeEqual } from "@/lib/crypto";
 
 /**
  * Sessions are opaque bearer tokens, not signed payloads.
@@ -25,16 +27,35 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** Constant-time compare for codes that arrive from a URL. */
-export function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
-
 function expiryFromNow(): Date {
   return new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * One definition of the session cookie, so the renewal path below cannot drift
+ * from the creation path and quietly drop a flag.
+ *
+ * `secure` is conditional rather than always-on because a local checkout runs
+ * on http://localhost, where a Secure cookie is simply never sent and nobody
+ * can sign in. In production `middleware.ts` refuses plain HTTP outright, so
+ * the conditional can never resolve to false on a real request.
+ *
+ * `sameSite: "lax"` and not "strict": strict would drop the cookie on the
+ * first navigation in from a LINE message, so a person following an invite
+ * link would land on the sign-in page while already signed in. Lax still
+ * blocks the cross-site POST that CSRF needs, and Server Actions add their own
+ * Origin check on top.
+ */
+function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    // A persistent cookie, not a session cookie — closing the browser, or the
+    // phone going to sleep for a month, must not require signing in again.
+    maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
+  };
 }
 
 export async function createSession(
@@ -55,15 +76,7 @@ export async function createSession(
   });
 
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    // A persistent cookie, not a session cookie — closing the browser, or
-    // the phone going to sleep for a month, must not require signing in again.
-    maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
-  });
+  jar.set(SESSION_COOKIE, token, sessionCookieOptions());
 }
 
 /**
@@ -94,13 +107,7 @@ export async function getViewer(): Promise<Viewer | null> {
       where: { id: session.id },
       data: { lastSeenAt: new Date(), expiresAt },
     });
-    jar.set(SESSION_COOKIE, token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
-    });
+    jar.set(SESSION_COOKIE, token, sessionCookieOptions());
   }
 
   return user as Viewer;
@@ -115,5 +122,8 @@ export async function destroyCurrentSession(): Promise<void> {
       data: { revokedAt: new Date() },
     });
   }
-  jar.delete(SESSION_COOKIE);
+  // Deleted with the same path it was written with — a bare delete() only
+  // clears a cookie scoped to the current path, which would leave the browser
+  // still holding a (now revoked) token on every other page.
+  jar.set(SESSION_COOKIE, "", { ...sessionCookieOptions(), maxAge: 0 });
 }

@@ -6,6 +6,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { getViewer } from "@/lib/session";
+import { encryptField } from "@/lib/crypto";
+import { optionalUrlSchema } from "@/lib/url";
+import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/actions/auth";
 
 const profileSchema = z.object({
@@ -15,7 +18,9 @@ const profileSchema = z.object({
   lineId: z.string().trim().max(60).optional().or(z.literal("")),
   shirtSize: z.string().trim().max(10).optional().or(z.literal("")),
   roleTitle: z.string().trim().max(80).optional().or(z.literal("")),
-  avatarUrl: z.string().trim().url("That is not a valid link.").optional().or(z.literal("")),
+  // An avatar is rendered as `<img src>`. Anything but http/https there is a
+  // scheme injection, so it goes through the same allowlist as every other link.
+  avatarUrl: optionalUrlSchema,
 });
 
 function clean(value: string | undefined): string | null {
@@ -25,6 +30,9 @@ function clean(value: string | undefined): string | null {
 export async function saveProfile(_prev: FormState, formData: FormData): Promise<FormState> {
   const viewer = await getViewer();
   if (!viewer) redirect("/login");
+
+  const limit = rateLimit(`write:${viewer.id}`, RULES.write);
+  if (!limit.ok) return { error: retryMessage(limit.retryAfter) };
 
   const parsed = profileSchema.safeParse({
     nickname: formData.get("nickname") ?? "",
@@ -42,13 +50,22 @@ export async function saveProfile(_prev: FormState, formData: FormData): Promise
   // Personal data stays minimal on purpose — name, grade, contact, shirt size.
   // Nothing here is an ID number, an address, or anything medical. PDPA
   // compliance is easiest when the data was never collected.
+  //
+  // The two fields that are still genuinely personal — a student's phone number
+  // and LINE ID — are encrypted before they reach the database, so a stolen
+  // snapshot is not a contact list. See src/lib/crypto.ts.
+  //
+  // A profile edit never touches tier, department or the active flags: those
+  // are somebody else's decision, and this form is the one endpoint every
+  // account can reach. Listing the writable columns by hand is what keeps an
+  // extra `<input name="tier">` in the posted body from meaning anything.
   await db.user.update({
     where: { id: viewer.id },
     data: {
       nickname: d.nickname,
       grade: clean(d.grade),
-      phone: clean(d.phone),
-      lineId: clean(d.lineId),
+      phone: encryptField(clean(d.phone)),
+      lineId: encryptField(clean(d.lineId)),
       shirtSize: clean(d.shirtSize),
       roleTitle: clean(d.roleTitle),
       avatarUrl: clean(d.avatarUrl),
@@ -61,5 +78,6 @@ export async function saveProfile(_prev: FormState, formData: FormData): Promise
   if (!viewer.profileCompletedAt) redirect("/dashboard");
 
   revalidatePath("/settings");
+  revalidatePath(`/people/${viewer.id}`);
   return { ok: "Profile saved." };
 }

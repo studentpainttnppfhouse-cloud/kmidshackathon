@@ -5,6 +5,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { assertCan, requireViewer, isAdmin } from "@/lib/authorize";
+import { EVENT_DAYS } from "@/lib/constants";
+import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/actions/auth";
 
 /** Which of the three event days is "today", or the first one otherwise. */
@@ -15,6 +17,11 @@ export async function currentEventDay(): Promise<string> {
 
 export async function toggleCheckin(day: string): Promise<void> {
   const viewer = await requireViewer();
+
+  // `day` becomes a stored column and a filter key. It is one of three known
+  // strings, so it is checked against them rather than length-capped and hoped
+  // over.
+  if (!(EVENT_DAYS as readonly string[]).includes(day)) return;
 
   const open = await db.checkin.findFirst({
     where: { userId: viewer.id, day, checkedOutAt: null },
@@ -40,6 +47,9 @@ const incidentSchema = z.object({
 
 export async function reportIncident(_prev: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireViewer();
+
+  const limit = rateLimit(`write:${viewer.id}`, RULES.write);
+  if (!limit.ok) return { error: retryMessage(limit.retryAfter) };
 
   const parsed = incidentSchema.safeParse({
     description: formData.get("description") ?? "",
@@ -68,8 +78,9 @@ export async function resolveIncident(id: string, resolution: string): Promise<v
   const viewer = await requireViewer();
   assertCan(viewer, "read", { kind: "incident" });
   if (!isAdmin(viewer)) return;
+  if (typeof resolution !== "string") return;
 
-  await db.incident.update({
+  await db.incident.updateMany({
     where: { id },
     data: { resolution: resolution.slice(0, 4000), resolvedAt: new Date() },
   });

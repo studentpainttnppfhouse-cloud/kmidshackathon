@@ -1,133 +1,14 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  createAnnouncement,
-  createDocument,
-  createFile,
-  createForm,
-} from "@/lib/actions/content";
+import { createAnnouncement, createFile, createForm } from "@/lib/actions/content";
 import type { FormState } from "@/lib/actions/auth";
-import { SubmitButton } from "@/components/submit-button";
-import { DOC_STATUS_LABEL } from "@/lib/constants";
-import type { DocStatus } from "@prisma/client";
+import { Feedback, SubmitButton } from "@/components/form-bits";
+
 
 const initial: FormState = {};
 
 type Dept = { id: string; name: string };
-
-function Feedback({ state }: { state: FormState }) {
-  if (state.error) {
-    return (
-      <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-        {state.error}
-      </p>
-    );
-  }
-  if (state.ok) {
-    return (
-      <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-        {state.ok}
-      </p>
-    );
-  }
-  return null;
-}
-
-export function DocumentForm({
-  departments,
-  canApprove,
-}: {
-  departments: Dept[];
-  canApprove: boolean;
-}) {
-  const [state, action] = useActionState(createDocument, initial);
-
-  return (
-    <form action={action} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="hs-label" htmlFor="doc-title">
-            Title
-          </label>
-          <input id="doc-title" name="title" required className="hs-input" placeholder="Partnership deck v4" />
-        </div>
-        <div>
-          <label className="hs-label" htmlFor="doc-dept">
-            Department
-          </label>
-          <select id="doc-dept" name="departmentId" required className="hs-input">
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label className="hs-label" htmlFor="doc-url">
-          Google Doc / Slides link
-        </label>
-        <input
-          id="doc-url"
-          name="externalUrl"
-          type="url"
-          required
-          className="hs-input"
-          placeholder="https://docs.google.com/document/d/…"
-        />
-        <p className="mt-1.5 text-xs text-faint">
-          The portal indexes the document. The content stays in Google, where
-          comments and version history already work.
-        </p>
-      </div>
-
-      <div>
-        <label className="hs-label" htmlFor="doc-desc">
-          Description
-        </label>
-        <textarea id="doc-desc" name="description" rows={2} className="hs-input resize-y" />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="hs-label" htmlFor="doc-status">
-            Status
-          </label>
-          <select id="doc-status" name="status" defaultValue="DRAFT" className="hs-input">
-            {(Object.keys(DOC_STATUS_LABEL) as DocStatus[]).map((s) => (
-              <option
-                key={s}
-                value={s}
-                disabled={!canApprove && (s === "APPROVED" || s === "PUBLISHED")}
-              >
-                {DOC_STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="hs-label" htmlFor="doc-tags">
-            Tags
-          </label>
-          <input
-            id="doc-tags"
-            name="tags"
-            className="hs-input"
-            placeholder="sponsor, deck, 2027"
-          />
-        </div>
-      </div>
-
-      <Feedback state={state} />
-      <SubmitButton className="hs-btn hs-btn-primary" pendingLabel="Adding…">
-        Add document
-      </SubmitButton>
-    </form>
-  );
-}
 
 export function FileForm({ departments }: { departments: Dept[] }) {
   const [state, action] = useActionState(createFile, initial);
