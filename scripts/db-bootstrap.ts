@@ -30,7 +30,7 @@
  *   npm run db:bootstrap
  */
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { resolveDatabaseUrl } from "../src/lib/database-url";
@@ -67,6 +67,104 @@ function run(name: string, args: string[]): boolean {
   return result.status === 0;
 }
 
+const MIGRATIONS_DIR = join(process.cwd(), "prisma", "migrations");
+
+/** Migration folder names, in the order Prisma applies them. */
+function migrationNames(): string[] {
+  return readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+/** Every table the migrations create, read out of the SQL itself. */
+function expectedTables(): string[] {
+  const names = new Set<string>();
+
+  for (const migration of migrationNames()) {
+    const sql = readFileSync(join(MIGRATIONS_DIR, migration, "migration.sql"), "utf8");
+    for (const match of sql.matchAll(/CREATE TABLE\s+`([^`]+)`/gi)) {
+      names.add(match[1].toLowerCase());
+    }
+  }
+
+  return [...names];
+}
+
+async function tablesInDatabase(db: PrismaClient): Promise<Set<string>> {
+  const rows = await db.$queryRaw<{ name: string }[]>`
+    SELECT TABLE_NAME AS name
+    FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE()
+  `;
+
+  return new Set(rows.map((row) => String(row.name).toLowerCase()));
+}
+
+/**
+ * Recovers from P3005 — "the database schema is not empty".
+ *
+ * Prisma refuses to apply migrations to a database that already has tables it
+ * has no record of creating, which is what you get if the schema was built by
+ * hand: pasting `migration.sql` into the TiDB SQL Editor produces exactly the
+ * right tables and no `_prisma_migrations` history at all.
+ *
+ * When every table the migrations would create is already there, the honest
+ * repair is to record them as applied rather than to drop anybody's data, and
+ * that is Prisma's own documented baseline procedure. Anything less than a
+ * complete match is left alone — a half-built schema is a decision for a human,
+ * not something to paper over.
+ */
+async function baselineIfNeeded(db: PrismaClient): Promise<boolean> {
+  const tables = await tablesInDatabase(db);
+  if (tables.size === 0) return true; // Fresh database; nothing to reconcile.
+
+  if (tables.has("_prisma_migrations")) {
+    const [{ applied }] = await db.$queryRaw<{ applied: bigint }[]>`
+      SELECT COUNT(*) AS applied FROM _prisma_migrations
+    `;
+    if (Number(applied) > 0) return true; // Prisma is already in charge here.
+  }
+
+  const expected = expectedTables();
+  const present = expected.filter((table) => tables.has(table));
+
+  if (present.length === 0) {
+    complain(
+      "the database already contains tables that are not this portal's, and\n" +
+        "  Prisma has no migration history for them. Point DATABASE_URL at a\n" +
+        "  database of its own rather than sharing this one.",
+    );
+    return false;
+  }
+
+  if (present.length < expected.length) {
+    const missing = expected.filter((table) => !tables.has(table));
+    complain(
+      `the schema is half-built — ${present.length} of ${expected.length} tables exist ` +
+        `(missing: ${missing.join(", ")}).\n` +
+        "  Nobody has signed in yet if this is a new deployment, so the quickest\n" +
+        "  repair is to recreate the database in the TiDB Cloud SQL Editor:\n\n" +
+        "    DROP DATABASE hackathon_studio;\n" +
+        "    CREATE DATABASE hackathon_studio;\n\n" +
+        "  If it already holds real data, baseline it by hand instead:\n" +
+        "  https://pris.ly/d/migrate-baseline",
+    );
+    return false;
+  }
+
+  say("tables exist but Prisma has no record of them — baselining (no data is touched)…");
+
+  for (const migration of migrationNames()) {
+    if (!run("prisma", ["migrate", "resolve", "--applied", migration])) {
+      complain(`could not record ${migration} as applied.`);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 const BANNER = "  ────────────────────────────────────────────────────────";
 
 function count(n: number, thing: string): string {
@@ -83,15 +181,17 @@ async function main(): Promise<boolean> {
     return false;
   }
 
-  say("applying migrations…");
-  if (!run("prisma", ["migrate", "deploy"])) {
-    complain("migrations failed — the portal will not be able to read its tables.");
-    return false;
-  }
-
   const db = new PrismaClient({ datasourceUrl: databaseUrl });
 
   try {
+    if (!(await baselineIfNeeded(db))) return false;
+
+    say("applying migrations…");
+    if (!run("prisma", ["migrate", "deploy"])) {
+      complain("migrations failed — the portal will not be able to read its tables.");
+      return false;
+    }
+
     const [users, departments] = await Promise.all([db.user.count(), db.department.count()]);
 
     let seeded = false;
