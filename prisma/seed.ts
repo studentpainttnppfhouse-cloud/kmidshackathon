@@ -10,6 +10,7 @@
 import { PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { resolveDatabaseUrl } from "../src/lib/database-url";
+import { ALLOWED_EMAIL_DOMAIN } from "../src/lib/constants";
 
 // Same TLS normalization the app uses, so seeding works with whatever string
 // was pasted into DATABASE_URL. See src/lib/database-url.ts.
@@ -121,10 +122,13 @@ async function main() {
       console.log(
         "\n  No users yet and OWNER_EMAIL is not set.\n" +
           "  Re-run with the first owner's address to generate a bootstrap invite:\n\n" +
-          "    OWNER_EMAIL=you@kmids.ac.th npm run db:seed\n",
+          `    OWNER_EMAIL=you@${ALLOWED_EMAIL_DOMAIN} npm run db:seed\n`,
       );
-    } else if (!email.toLowerCase().endsWith("@kmids.ac.th")) {
-      console.error(`\n  OWNER_EMAIL must be a @kmids.ac.th address. Got: ${email}\n`);
+    } else if (!email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
+      console.error(
+        `\n  OWNER_EMAIL must be a @${ALLOWED_EMAIL_DOMAIN} address — that is what\n` +
+          `  the login gate accepts. Got: ${email}\n`,
+      );
       process.exitCode = 1;
     } else {
       // The bootstrap owner has to exist before an Invite can point at it, so

@@ -54,12 +54,24 @@ Two options for February–March 2027:
 
 ## Health and deploys
 
-`/api/health` pings the database and returns `200` with latency, or `503` if the
-database is unreachable. Render uses it as the health check, and it is the first
-thing to curl when something looks wrong.
+`/api/health` is the first thing to open when something looks wrong. It reports
+two different things, because they fail separately:
+
+| Response | Meaning |
+| --- | --- |
+| `{"status":"ok","database":"up","schema":"ready"}` | Fine |
+| `503 {"database":"down"}` | TiDB is unreachable — the cluster, the URL, or TLS |
+| `{"status":"degraded","schema":"missing"}` | TiDB answers, but the tables were never created. Redeploy |
+
+That last one is the failure worth knowing: an empty database answers `SELECT 1`
+perfectly, so the service looks healthy right up until somebody opens a page
+that reads a table and gets `P2021: The table 'users' does not exist`.
 
 Deploys are automatic from `main`. Migrations run in the build step, so a
-migration failure fails the build rather than half-breaking a running service.
+migration failure fails the build rather than half-breaking a running service —
+and `npm start` runs `db:bootstrap` again before Next starts, so a service whose
+build command is missing the migration step still repairs itself on the next
+deploy.
 
 **Deploying does not sign anyone out.** Sessions live in the database and do not
 depend on the build or on `AUTH_SECRET`. Ship whenever.
@@ -72,6 +84,9 @@ depend on the build or on `AUTH_SECRET`. Ship whenever.
 | Slow first load in the morning | Free-tier cold start. Expected; see above |
 | One person cannot sign in | Are they locked out? Is their account Active? Is the email `@kmids.ac.th`? |
 | A build fails | Read the migration step first — that is where it usually is |
+| `P2021: The table 'users' does not exist` | Migrations never ran. Check `/api/health` for `schema: "missing"`, then redeploy — the start command applies them. If it keeps happening, the service's build command is missing `npm run db:bootstrap` (see the README) |
+| `P1003: database does not exist` | The database itself was never created. In TiDB Cloud → SQL Editor: `CREATE DATABASE hackathon_studio;` |
+| Nobody can sign in on a brand-new deploy | Nobody has a password yet. The bootstrap owner invite link is printed in the deploy log on every boot until somebody does |
 | `1105: Connections using insecure transport are prohibited` | TiDB rejecting a non-TLS connection. The URL needs `?sslaccept=strict`; the portal now appends it to any `*.tidbcloud.com` string automatically, so this means an old build — redeploy |
 | Somebody deleted something | Nothing is hard-deleted. It is in the recycle bin |
 

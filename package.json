@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prestart": "tsx scripts/db-bootstrap.ts || true",
     "start": "next start -p ${PORT:-3000}",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "tsx scripts/prisma.ts migrate dev",
     "db:deploy": "tsx scripts/prisma.ts migrate deploy",
+    "db:bootstrap": "tsx scripts/db-bootstrap.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "tsx scripts/prisma.ts studio",
     "test": "tsx --test tests/*.test.ts"

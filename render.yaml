@@ -1,8 +1,13 @@
 # Render blueprint for Hackathon Studio.
 #
-# Deploying: create a Blueprint from this repo, then set DATABASE_URL in the
-# Render dashboard to the TiDB Cloud connection string. Everything else is
-# either generated or has a working default.
+# Deploying: create a Blueprint from this repo (New → Blueprint), then set
+# DATABASE_URL in the Render dashboard to the TiDB Cloud connection string.
+# Everything else is either generated or has a working default.
+#
+# If the service was created by hand instead (New → Web Service), Render does
+# NOT read this file — copy the build and start commands below into the
+# dashboard, or the schema never gets created and every page that touches a
+# table dies with "The table `users` does not exist in the current database".
 
 services:
   - type: web
@@ -12,7 +17,10 @@ services:
     region: singapore # closest Render region to Bangkok
     branch: main
     healthCheckPath: /api/health
-    buildCommand: npm ci && npx prisma generate && npm run db:deploy && npm run build
+    # db:bootstrap applies migrations and seeds an empty database. It runs
+    # again from `prestart` on every boot, so a service created without this
+    # build command still repairs itself.
+    buildCommand: npm ci && npx prisma generate && npm run db:bootstrap -- --strict && npm run build
     startCommand: npm start
     autoDeploy: true
     envVars:
@@ -20,6 +28,11 @@ services:
         # Set this by hand — the TiDB Cloud string, never committed. Port 4000.
         # ?sslaccept=strict is added automatically if you leave it off; TiDB
         # rejects any connection that is not TLS.
+        sync: false
+      - key: OWNER_EMAIL
+        # The first account. Set it before the first deploy and the bootstrap
+        # invite link is printed in the deploy log — the only way in on the
+        # free plan, which has no Shell. Safe to remove once you have signed in.
         sync: false
       - key: AUTH_SECRET
         # Render generates this once and keeps it across deploys. Sessions do

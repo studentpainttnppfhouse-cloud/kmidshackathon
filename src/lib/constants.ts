@@ -1,7 +1,18 @@
 import type { Tier } from "@prisma/client";
 
-/** Sign-in is restricted to this domain, checked on the server every time. */
-export const ALLOWED_EMAIL_DOMAIN = "kmids.ac.th";
+/**
+ * Sign-in is restricted to this domain, checked on the server every time.
+ *
+ * Overridable so a deployment can be brought up before the school addresses
+ * are handed out — set ALLOWED_EMAIL_DOMAIN on the service and both the login
+ * gate and the seed follow it. The server is what enforces it; the copy the
+ * browser bundles is only used for a placeholder, and falls back to the
+ * default because Next inlines nothing that is not NEXT_PUBLIC_.
+ */
+export const ALLOWED_EMAIL_DOMAIN = (process.env.ALLOWED_EMAIL_DOMAIN || "kmids.ac.th")
+  .trim()
+  .replace(/^@/, "")
+  .toLowerCase();
 
 /** 20 March 2027, 08:00 ICT — the countdown target on every dashboard. */
 export const EVENT_START = new Date("2027-03-20T01:00:00.000Z");
