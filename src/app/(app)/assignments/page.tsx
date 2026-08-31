@@ -87,7 +87,7 @@ export default async function AssignmentsPage({
         href={`/assignments?${params}`}
         aria-current={view === v ? "page" : undefined}
         className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-          view === v ? "bg-brand text-white" : "bg-surface text-muted hover:text-pink-700"
+          view === v ? "bg-brand-solid text-on-brand" : "bg-surface text-muted hover:text-brand-deep"
         }`}
       >
         {label}
@@ -123,7 +123,7 @@ export default async function AssignmentsPage({
         <Link
           href={`/assignments?view=${view}`}
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            !sp.dept ? "bg-pink-100 text-pink-700" : "bg-surface text-muted hover:text-pink-700"
+            !sp.dept ? "bg-tint-strong text-brand-deep" : "bg-surface text-muted hover:text-brand-deep"
           }`}
         >
           All departments
@@ -133,7 +133,7 @@ export default async function AssignmentsPage({
             key={d.id}
             href={`/assignments?view=${view}&dept=${d.slug}`}
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              sp.dept === d.slug ? "bg-pink-100 text-pink-700" : "bg-surface text-muted hover:text-pink-700"
+              sp.dept === d.slug ? "bg-tint-strong text-brand-deep" : "bg-surface text-muted hover:text-brand-deep"
             }`}
           >
             {d.name}

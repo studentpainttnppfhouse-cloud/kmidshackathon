@@ -65,7 +65,7 @@ export default async function NewFormPage({
           href="/forms/new"
           aria-current={!external ? "page" : undefined}
           className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-            !external ? "bg-brand text-white" : "bg-surface text-muted hover:text-pink-700"
+            !external ? "bg-brand-solid text-on-brand" : "bg-surface text-muted hover:text-brand-deep"
           }`}
         >
           Build it here
@@ -74,7 +74,7 @@ export default async function NewFormPage({
           href="/forms/new?kind=external"
           aria-current={external ? "page" : undefined}
           className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-            external ? "bg-brand text-white" : "bg-surface text-muted hover:text-pink-700"
+            external ? "bg-brand-solid text-on-brand" : "bg-surface text-muted hover:text-brand-deep"
           }`}
         >
           Link a Google Form

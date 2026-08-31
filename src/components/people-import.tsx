@@ -60,7 +60,7 @@ export function PeopleImport({ departmentSlugs }: { departmentSlugs: string[] })
         </div>
       </div>
 
-      <p className="rounded-[10px] bg-pink-50/60 px-3 py-2.5 text-xs text-muted">
+      <p className="rounded-[10px] bg-tint/60 px-3 py-2.5 text-xs text-muted">
         This creates <strong>invites</strong>, not accounts. Nobody is signed in by importing them —
         each person still picks their own password from their own link. Copy the links from Pending
         invites above.
@@ -69,11 +69,11 @@ export function PeopleImport({ departmentSlugs }: { departmentSlugs: string[] })
       <Feedback state={state} />
 
       {state.skipped && state.skipped.length > 0 ? (
-        <div className="rounded-[10px] border border-amber-200 bg-amber-50/60 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+        <div className="rounded-[10px] border border-warn-edge bg-warn-soft/60 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-warn-strong">
             {state.skipped.length} row{state.skipped.length === 1 ? "" : "s"} skipped
           </p>
-          <ul className="mt-1.5 space-y-1 text-xs text-amber-800">
+          <ul className="mt-1.5 space-y-1 text-xs text-warn-strong">
             {state.skipped.map((row) => (
               <li key={`${row.line}-${row.email}`}>
                 Line {row.line} — {row.email || "(no email)"}: {row.reason}

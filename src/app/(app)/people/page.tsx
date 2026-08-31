@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
 import { Avatar, Card, Divider, EmptyState, PageHeader, SectionTitle, TierPill } from "@/components/ui";
+import { swatchStyle } from "@/lib/color";
 
 export const metadata: Metadata = { title: "People" };
 export const dynamic = "force-dynamic";
@@ -106,8 +107,8 @@ export default async function PeoplePage({
                   <TierPill tier={p.tier} />
                   {p.department ? (
                     <span
-                      className="hs-pill text-white"
-                      style={{ background: p.department.color }}
+                      className="hs-pill"
+                      style={swatchStyle(p.department.color)}
                     >
                       {p.department.name}
                     </span>
@@ -125,14 +126,14 @@ export default async function PeoplePage({
         <SectionTitle>Org chart</SectionTitle>
         <div className="space-y-4">
           {departments.map((d) => (
-            <div key={d.id} className="rounded-xl border border-[#f3e3ec] p-4">
+            <div key={d.id} className="rounded-xl border border-line p-4">
               <div className="mb-3 flex items-center gap-2">
                 <span
                   className="h-3 w-3 rounded-full"
                   style={{ background: d.color }}
                   aria-hidden="true"
                 />
-                <Link href={`/departments/${d.slug}`} className="font-bold text-ink hover:text-pink-700">
+                <Link href={`/departments/${d.slug}`} className="font-bold text-ink hover:text-brand-deep">
                   {d.name}
                 </Link>
                 <span className="text-xs text-faint">{d.members.length} people</span>
@@ -141,7 +142,7 @@ export default async function PeoplePage({
               {d.head ? (
                 <Link
                   href={`/people/${d.head.id}`}
-                  className="mb-3 flex items-center gap-2 rounded-lg bg-pink-50 px-3 py-2"
+                  className="mb-3 flex items-center gap-2 rounded-lg bg-tint px-3 py-2"
                 >
                   <Avatar
                     name={d.head.name}
@@ -150,7 +151,7 @@ export default async function PeoplePage({
                     size={30}
                   />
                   <span className="text-sm">
-                    <span className="font-semibold text-pink-700">
+                    <span className="font-semibold text-brand-deep">
                       {d.head.nickname || d.head.name}
                     </span>
                     <span className="ml-1.5 text-xs text-muted">Head</span>
@@ -167,7 +168,7 @@ export default async function PeoplePage({
                     <Link
                       key={m.id}
                       href={`/people/${m.id}`}
-                      className="flex items-center gap-1.5 rounded-full border border-[#f3e3ec] py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-muted hover:border-pink-300 hover:text-pink-700"
+                      className="flex items-center gap-1.5 rounded-full border border-line py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-muted hover:border-brand hover:text-brand-deep"
                     >
                       <Avatar name={m.name} nickname={m.nickname} url={m.avatarUrl} size={22} />
                       {m.nickname || m.name}

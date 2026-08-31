@@ -7,6 +7,7 @@ import { AssignmentRow, type AssignmentSummary } from "@/components/assignment-r
 import { Avatar, Card, DocStatusPill, EmptyState, SectionTitle, TierPill } from "@/components/ui";
 import { formatDateLong } from "@/lib/dates";
 import { decryptField } from "@/lib/crypto";
+import { swatchStyle } from "@/lib/color";
 
 export const metadata: Metadata = { title: "Profile" };
 export const dynamic = "force-dynamic";
@@ -71,7 +72,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-5">
-      <Link href="/people" className="text-sm font-semibold text-pink-600">
+      <Link href="/people" className="text-sm font-semibold text-brand-deep">
         ← Directory
       </Link>
 
@@ -89,21 +90,21 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
               {person.department ? (
                 <Link
                   href={`/departments/${person.department.slug}`}
-                  className="hs-pill text-white"
-                  style={{ background: person.department.color }}
+                  className="hs-pill"
+                  style={swatchStyle(person.department.color)}
                 >
                   {person.department.name}
                 </Link>
               ) : null}
-              {person.isReserve ? <span className="hs-pill bg-amber-50 text-amber-700">Reserve</span> : null}
-              {person.isMentor ? <span className="hs-pill bg-teal-50 text-teal-700">Mentor</span> : null}
-              {person.isAlumni ? <span className="hs-pill bg-slate-100 text-slate-600">Alumni</span> : null}
-              {!person.isActive ? <span className="hs-pill bg-red-50 text-red-700">Suspended</span> : null}
+              {person.isReserve ? <span className="hs-pill bg-warn-soft text-warn-strong">Reserve</span> : null}
+              {person.isMentor ? <span className="hs-pill bg-teal-soft text-teal-strong">Mentor</span> : null}
+              {person.isAlumni ? <span className="hs-pill bg-neutral-soft text-neutral-strong">Alumni</span> : null}
+              {!person.isActive ? <span className="hs-pill bg-danger-soft text-danger-strong">Suspended</span> : null}
             </div>
           </div>
         </div>
 
-        <dl className="mt-5 grid gap-4 border-t border-[#f6ecf2] pt-4 text-sm sm:grid-cols-4">
+        <dl className="mt-5 grid gap-4 border-t border-line-soft pt-4 text-sm sm:grid-cols-4">
           <div>
             <dt className="hs-eyebrow">Grade</dt>
             <dd className="mt-0.5 font-semibold text-ink">{person.grade ?? "—"}</dd>
@@ -162,7 +163,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
               <li key={d.id} className="flex items-center justify-between gap-3">
                 <Link
                   href={`/documents/${d.id}`}
-                  className="truncate text-sm font-semibold text-ink hover:text-pink-700"
+                  className="truncate text-sm font-semibold text-ink hover:text-brand-deep"
                 >
                   {d.title}
                 </Link>

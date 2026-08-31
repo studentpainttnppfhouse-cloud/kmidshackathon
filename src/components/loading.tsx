@@ -64,8 +64,8 @@ export function SkeletonStats({ count = 4 }: { count?: number }) {
 export function LoadingHeader({ label = "Loading" }: { label?: string }) {
   return (
     <div className="hs-loading-header" role="status" aria-live="polite">
-      <Ecg className="w-20 text-pink-400" animate />
-      <span className="text-sm font-semibold text-pink-700">{label}…</span>
+      <Ecg className="w-20 text-brand/60" animate />
+      <span className="text-sm font-semibold text-brand-deep">{label}…</span>
     </div>
   );
 }

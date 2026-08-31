@@ -75,7 +75,7 @@ function QuestionField({
         {index + 1}. {question.label}
       </span>
       {question.required ? (
-        <span className="ml-1 text-red-600" aria-hidden="true">
+        <span className="ml-1 text-danger-strong" aria-hidden="true">
           *
         </span>
       ) : null}
@@ -111,7 +111,7 @@ function QuestionField({
           {optionsFor(question).map((option) => (
             <label
               key={option}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted transition hover:bg-pink-50/60"
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted transition hover:bg-tint/60"
             >
               <input
                 type={multiple ? "checkbox" : "radio"}

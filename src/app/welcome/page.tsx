@@ -22,10 +22,10 @@ export default async function WelcomePage() {
             <h1 className="hs-h1">Welcome to Hackathon Studio</h1>
             <p className="mt-1 text-sm text-muted">
               One quick setup, then you are in for good. Signed in as{" "}
-              <span className="font-semibold text-pink-700">{viewer.email}</span>
+              <span className="font-semibold text-brand-deep">{viewer.email}</span>
             </p>
           </div>
-          <Ecg className="w-28 text-pink-300" />
+          <Ecg className="w-28 text-brand/40" />
         </div>
 
         <div className="hs-card p-6">

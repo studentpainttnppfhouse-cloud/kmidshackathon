@@ -5,6 +5,7 @@ import { markAnnouncementRead } from "@/lib/actions/content";
 import Link from "next/link";
 import { Avatar, EmptyState, PageHeader } from "@/components/ui";
 import { timeAgo } from "@/lib/dates";
+import { swatchStyle } from "@/lib/color";
 
 export const metadata: Metadata = { title: "Announcements" };
 export const dynamic = "force-dynamic";
@@ -68,21 +69,21 @@ export default async function AnnouncementsPage() {
             return (
               <article
                 key={n.id}
-                className={`hs-card p-5 ${unread ? "border-pink-300 bg-pink-50/30" : ""}`}
+                className={`hs-card p-5 ${unread ? "border-brand bg-tint/30" : ""}`}
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   {n.pinned ? (
-                    <span className="hs-pill bg-amber-50 text-amber-700">📌 Pinned</span>
+                    <span className="hs-pill bg-warn-soft text-warn-strong">📌 Pinned</span>
                   ) : null}
                   {n.department ? (
-                    <span className="hs-pill text-white" style={{ background: n.department.color }}>
+                    <span className="hs-pill" style={swatchStyle(n.department.color)}>
                       {n.department.name}
                     </span>
                   ) : (
-                    <span className="hs-pill bg-pink-100 text-pink-700">All staff</span>
+                    <span className="hs-pill bg-tint-strong text-brand-deep">All staff</span>
                   )}
                   {unread ? (
-                    <span className="hs-pill bg-brand text-white">New</span>
+                    <span className="hs-pill bg-brand-solid text-on-brand">New</span>
                   ) : null}
                 </div>
 
@@ -91,7 +92,7 @@ export default async function AnnouncementsPage() {
                   {n.body}
                 </p>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[#f6ecf2] pt-3">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-3">
                   <span className="flex items-center gap-1.5 text-xs text-faint">
                     <Avatar
                       name={n.author.name}
@@ -120,7 +121,7 @@ export default async function AnnouncementsPage() {
                         </button>
                       </form>
                     ) : (
-                      <span className="text-xs text-emerald-600">✓ Read</span>
+                      <span className="text-xs text-ok-strong">✓ Read</span>
                     )}
                   </span>
                 </div>

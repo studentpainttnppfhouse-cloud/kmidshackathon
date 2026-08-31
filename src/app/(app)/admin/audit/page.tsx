@@ -33,7 +33,7 @@ export default async function AuditPage({
 
   return (
     <div className="space-y-5">
-      <Link href="/admin" className="text-sm font-semibold text-pink-600">
+      <Link href="/admin" className="text-sm font-semibold text-brand-deep">
         ← Admin
       </Link>
 
@@ -51,7 +51,7 @@ export default async function AuditPage({
         {entries.length === 0 ? (
           <EmptyState title="Nothing logged yet" />
         ) : (
-          <ul className="divide-y divide-[#f8eef3]">
+          <ul className="divide-y divide-line-soft">
             {entries.map((e) => (
               <li key={e.id} className="flex items-center gap-3 py-2.5">
                 <Avatar
@@ -65,7 +65,7 @@ export default async function AuditPage({
                     <span className="font-semibold">
                       {e.user?.nickname || e.user?.name || "System"}
                     </span>{" "}
-                    <span className="font-mono text-xs text-pink-700">{e.action}</span>
+                    <span className="font-mono text-xs text-brand-deep">{e.action}</span>
                     {e.detail ? <span className="text-muted"> · {e.detail}</span> : null}
                   </span>
                   <span className="block text-[11px] text-faint">
@@ -79,9 +79,9 @@ export default async function AuditPage({
         )}
 
         {pages > 1 ? (
-          <div className="mt-4 flex items-center justify-between border-t border-[#f6ecf2] pt-3 text-sm">
+          <div className="mt-4 flex items-center justify-between border-t border-line-soft pt-3 text-sm">
             {page > 1 ? (
-              <Link href={`/admin/audit?page=${page - 1}`} className="font-semibold text-pink-600">
+              <Link href={`/admin/audit?page=${page - 1}`} className="font-semibold text-brand-deep">
                 ← Newer
               </Link>
             ) : (
@@ -91,7 +91,7 @@ export default async function AuditPage({
               Page {page} of {pages}
             </span>
             {page < pages ? (
-              <Link href={`/admin/audit?page=${page + 1}`} className="font-semibold text-pink-600">
+              <Link href={`/admin/audit?page=${page + 1}`} className="font-semibold text-brand-deep">
                 Older →
               </Link>
             ) : (

@@ -156,11 +156,11 @@ export function AssignmentForm({
       <fieldset>
         <legend className="hs-label">Assigned to</legend>
         {canAssignOthers ? (
-          <div className="grid max-h-56 gap-1 overflow-y-auto rounded-[10px] border border-[#ecd7e3] bg-white p-2 sm:grid-cols-2">
+          <div className="grid max-h-56 gap-1 overflow-y-auto rounded-[10px] border border-edge bg-surface p-2 sm:grid-cols-2">
             {people.map((p) => (
               <label
                 key={p.id}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-pink-50"
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-tint"
               >
                 <input
                   type="checkbox"
@@ -185,7 +185,7 @@ export function AssignmentForm({
             {people.slice(0, 1).map((p) => (
               <input key={p.id} type="hidden" name="assigneeIds" value={p.id} />
             ))}
-            <p className="rounded-[10px] bg-pink-50 px-3 py-2.5 text-sm text-muted">
+            <p className="rounded-[10px] bg-tint px-3 py-2.5 text-sm text-muted">
               Members file tasks for themselves. Ask your head to reassign it to somebody else.
             </p>
           </>

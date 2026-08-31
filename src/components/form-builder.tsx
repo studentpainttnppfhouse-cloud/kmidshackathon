@@ -257,7 +257,7 @@ function QuestionCard({
             type="button"
             onClick={onRemove}
             disabled={total === 1}
-            className="hs-btn hs-btn-ghost px-2 py-1 text-xs text-red-600"
+            className="hs-btn hs-btn-ghost px-2 py-1 text-xs text-danger-strong"
             aria-label={`Remove question ${index + 1}`}
           >
             ✕

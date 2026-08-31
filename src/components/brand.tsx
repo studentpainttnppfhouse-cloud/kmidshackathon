@@ -3,7 +3,7 @@ import { Ecg } from "@/components/ui";
 export function Logo({ size = 40 }: { size?: number }) {
   return (
     <span
-      className="inline-flex items-center justify-center rounded-[12px] bg-brand text-white"
+      className="inline-flex items-center justify-center rounded-[12px] bg-brand-solid text-on-brand"
       style={{ width: size, height: size }}
       aria-hidden="true"
     >
@@ -19,7 +19,7 @@ export function Wordmark() {
     <span className="flex items-center gap-2.5">
       <Logo size={34} />
       <span className="leading-tight">
-        <span className="block text-[15px] font-extrabold tracking-tight text-pink-700">
+        <span className="block text-[15px] font-extrabold tracking-tight text-brand-deep">
           Hackathon Studio
         </span>
         <span className="block text-[11px] font-semibold tracking-wide text-faint">
@@ -47,10 +47,10 @@ export function AuthShell({
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <Logo size={54} />
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-pink-700">{title}</h1>
+            <h1 className="text-xl font-extrabold tracking-tight text-brand-deep">{title}</h1>
             {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
           </div>
-          <Ecg className="w-28 text-pink-300" />
+          <Ecg className="w-28 text-brand/40" />
         </div>
         <div className="hs-card p-6 shadow-[0_1px_3px_rgba(190,24,93,0.06)]">{children}</div>
         {footer ? <div className="mt-5 text-center text-xs text-faint">{footer}</div> : null}

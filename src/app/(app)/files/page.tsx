@@ -100,7 +100,7 @@ export default async function FilesPage({
         <div className="flex flex-wrap gap-1.5">
           <Link
             href="/files"
-            className={`hs-pill ${!tag ? "bg-pink-100 text-pink-700" : "bg-white text-muted"}`}
+            className={`hs-pill ${!tag ? "bg-tint-strong text-brand-deep" : "bg-surface text-muted"}`}
           >
             All tags
           </Link>
@@ -108,7 +108,7 @@ export default async function FilesPage({
             <Link
               key={t}
               href={`/files?tag=${encodeURIComponent(t)}`}
-              className={`hs-pill ${tag === t ? "bg-pink-100 text-pink-700" : "bg-white text-muted"}`}
+              className={`hs-pill ${tag === t ? "bg-tint-strong text-brand-deep" : "bg-surface text-muted"}`}
             >
               {t}
             </Link>
@@ -142,9 +142,9 @@ export default async function FilesPage({
               className="hs-card p-4"
             >
               <span className="mb-1.5 flex items-center gap-2">
-                <span className="hs-pill bg-pink-50 text-pink-700">{f.kind}</span>
+                <span className="hs-pill bg-tint text-brand-deep">{f.kind}</span>
                 {f.isBrandKit ? (
-                  <span className="hs-pill bg-violet-50 text-violet-700">Brand</span>
+                  <span className="hs-pill bg-violet-soft text-violet-strong">Brand</span>
                 ) : null}
               </span>
               <span className="block text-sm font-bold text-ink">{f.name} ↗</span>

@@ -19,7 +19,7 @@ export function AssignmentRow({ a, showDepartment = true }: { a: AssignmentSumma
   return (
     <Link
       href={`/assignments/${a.id}`}
-      className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 transition hover:border-pink-200 hover:bg-pink-50/50"
+      className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 transition hover:border-edge hover:bg-tint/50"
     >
       <span
         className="h-8 w-1 shrink-0 rounded-full"
@@ -30,7 +30,7 @@ export function AssignmentRow({ a, showDepartment = true }: { a: AssignmentSumma
         <span className="block truncate text-sm font-semibold text-ink">{a.title}</span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           {showDepartment ? <span className="text-faint">{a.department.name}</span> : null}
-          <span className={overdue ? "font-semibold text-red-600" : "text-muted"}>
+          <span className={overdue ? "font-semibold text-danger-strong" : "text-muted"}>
             {relativeDue(a.dueDate)}
           </span>
         </span>

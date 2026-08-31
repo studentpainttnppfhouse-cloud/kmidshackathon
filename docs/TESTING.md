@@ -15,7 +15,7 @@ npm run test:e2e
 
 ---
 
-## Unit suite — 66 tests, all passing
+## Unit suite — 72 tests, all passing
 
 `npm test`
 
@@ -79,9 +79,21 @@ Every tier against every action, including the cases most likely to leak:
 
 TiDB TLS normalisation, including passwords containing `?` and `#`.
 
+### Department colour legibility (`tests/color.test.ts`)
+
+Department colours are staff-chosen and end up behind white text, and several
+of the seeded ones — `#F59E0B`, `#22C55E`, `#2DD4BF` — were 2:1 against it.
+
+- every seeded colour, plus black, white, mid-grey and pure yellow, clears
+  4.5:1 once deepened
+- a colour that already passes is returned byte-for-byte unchanged
+- deepening holds the hue: amber stays amber, green stays green
+- a missing or malformed colour falls back to the theme's brand pairing rather
+  than to `undefined`, which would render white on white
+
 ---
 
-## Browser suite — 28 tests
+## Browser suite — 50 tests
 
 `npm run test:e2e`, against a server you have already started.
 
@@ -135,6 +147,28 @@ BASE_URL=http://127.0.0.1:3210 E2E_INVITE_CODE=<code> npm run test:e2e
   `Content-Disposition` path is exercised
 - the editor's preview renders through the same renderer that saves
 - a built form is filled in and the answer appears in the owner's response table
+
+### Contrast (`tests/e2e/contrast.spec.ts`)
+
+Eleven pages, in both themes, audited in the browser rather than by eye. Every
+text node on the page is measured against the background actually behind it —
+compositing translucent ancestors, so an `/70` fill on a card on a page
+resolves correctly — and checked against WCAG 2.1 AA: 4.5:1, or 3:1 for large
+text.
+
+Text over a gradient or an image is reported as unmeasurable rather than
+guessed at, since `getComputedStyle` returns the gradient's declaration and not
+the pixel under the word.
+
+| Page | Light | Dark |
+| --- | --- | --- |
+| `/dashboard`, `/assignments` (board and list), `/people`, `/documents`, `/departments`, `/announcements`, `/forms`, `/files`, `/brand`, `/help` | Pass | Pass |
+
+This is the test that stops the dark theme regressing the way it did before:
+one component written with a light-mode-only Tailwind pair (`bg-white`,
+`bg-emerald-50 text-emerald-700`) is invisible to any amount of
+`:root[data-theme]` work, and only shows up when something measures the
+rendered page.
 
 ### Interface
 

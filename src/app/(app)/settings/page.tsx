@@ -57,7 +57,7 @@ export default async function SettingsPage() {
           {sessions.map((s) => (
             <li
               key={s.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f3e3ec] p-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-ink">
