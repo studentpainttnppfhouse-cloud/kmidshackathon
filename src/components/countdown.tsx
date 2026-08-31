@@ -33,13 +33,13 @@ export function Countdown({ targetIso }: { targetIso: string }) {
         };
 
   return (
-    <div className="hs-card overflow-hidden bg-gradient-to-br from-pink-500 to-pink-700 p-5 text-white">
+    <div className="hs-card overflow-hidden bg-gradient-to-br from-pink-600 to-pink-700 p-5 text-white">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.09em] text-pink-100">
+          <p className="text-[11px] font-bold uppercase tracking-[0.09em] text-white">
             Countdown to event
           </p>
-          <p className="mt-0.5 text-sm font-medium text-pink-50">20–21 March 2027</p>
+          <p className="mt-0.5 text-sm font-medium text-white">20–21 March 2027</p>
         </div>
         <Ecg className="w-20 text-pink-200/80" />
       </div>
@@ -53,11 +53,11 @@ export function Countdown({ targetIso }: { targetIso: string }) {
             ["Sec", parts?.seconds],
           ] as const
         ).map(([label, value]) => (
-          <div key={label} className="rounded-xl bg-white/15 py-2.5">
+          <div key={label} className="rounded-xl bg-black/15 py-2.5">
             <p className="text-xl font-extrabold tabular-nums">
               {value === undefined || value === null ? "—" : String(value).padStart(2, "0")}
             </p>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-pink-100">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-white">
               {label}
             </p>
           </div>

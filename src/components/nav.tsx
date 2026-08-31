@@ -69,8 +69,8 @@ export function AppNav({
           aria-current={isActive(item.href) ? "page" : undefined}
           className={`group flex items-center justify-between gap-2 rounded-[10px] px-3 py-2 text-sm font-medium transition ${
             isActive(item.href)
-              ? "bg-pink-50 text-pink-700"
-              : "text-muted hover:bg-pink-50/60 hover:text-pink-700"
+              ? "bg-tint text-brand-deep"
+              : "text-muted hover:bg-tint/60 hover:text-brand-deep"
           }`}
         >
           <span className="flex min-w-0 items-center gap-2.5">
@@ -82,7 +82,7 @@ export function AppNav({
             <span className="truncate">{item.label}</span>
           </span>
           {item.badge ? (
-            <span className="rounded-full bg-brand px-1.5 py-0.5 text-[11px] font-bold text-white">
+            <span className="rounded-full bg-brand-solid px-1.5 py-0.5 text-[11px] font-bold text-on-brand">
               {item.badge}
             </span>
           ) : null}
@@ -95,7 +95,7 @@ export function AppNav({
     <div className="border-t border-line pt-4">
       <Link
         href="/settings"
-        className="flex items-center gap-2.5 rounded-[10px] px-1 py-1.5 transition hover:bg-pink-50/60"
+        className="flex items-center gap-2.5 rounded-[10px] px-1 py-1.5 transition hover:bg-tint/60"
       >
         <Avatar name={viewer.name} nickname={viewer.nickname} url={viewer.avatarUrl} size={34} />
         <span className="min-w-0 leading-tight">

@@ -25,7 +25,7 @@ export function InviteForm({
 
       <div>
         <span className="hs-label">Your email</span>
-        <p className="rounded-[10px] bg-pink-50 px-3 py-2.5 text-sm font-medium text-pink-700">
+        <p className="rounded-[10px] bg-tint px-3 py-2.5 text-sm font-medium text-brand-deep">
           {email}
         </p>
       </div>

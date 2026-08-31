@@ -33,12 +33,64 @@
   --color-faint: var(--hs-faint);
   --color-line: var(--hs-line);
 
-  --color-ok: #22c55e;
-  --color-warn: #f59e0b;
-  --color-danger: #dc2626;
-  --color-info: #0ea5e9;
-  --color-teal: #2dd4bf;
-  --color-violet: #7c3aed;
+  /* `brand` is the identity colour and is used for fills, rules and focus
+     rings — never as a background under text, because at 3.5:1 against white
+     it cannot carry any. `brand-solid` is the one that can, and `on-brand` is
+     what goes on top of it. Both flip with the theme: on a dark ground the
+     readable pairing is dark ink on light pink, not the reverse. */
+  --color-brand-solid: var(--hs-brand-solid);
+  --color-on-brand: var(--hs-on-brand);
+
+  /* Hairlines and edges. `line` divides, `line-soft` divides more quietly, and
+     `edge` is the boundary of an interactive control — which, unlike the other
+     two, is load-bearing and so has to clear 3:1 (WCAG 1.4.11). */
+  --color-line-soft: var(--hs-line-soft);
+  --color-edge: var(--hs-edge);
+
+  /* Brand-tinted fills. In light these are the palest pinks; in dark they are
+     deep plums, because a #fdf2f8 block on a near-black page is a flashbulb. */
+  --color-tint: var(--hs-tint);
+  --color-tint-strong: var(--hs-tint-strong);
+
+  /* Status tones. Each is a triple — a `soft` fill, a `strong` foreground that
+     clears 4.5:1 on that fill *and* on a bare card, and an `edge` for banners.
+     Tailwind's own `bg-emerald-50 text-emerald-700` pairs cannot do this: they
+     are one fixed light-mode pair, which is exactly how a dark theme ends up
+     with white blocks in it. */
+  --color-neutral-soft: var(--hs-neutral-soft);
+  --color-neutral-strong: var(--hs-neutral-strong);
+  --color-neutral-edge: var(--hs-neutral-edge);
+
+  --color-info-soft: var(--hs-info-soft);
+  --color-info-strong: var(--hs-info-strong);
+  --color-info-edge: var(--hs-info-edge);
+
+  --color-warn-soft: var(--hs-warn-soft);
+  --color-warn-strong: var(--hs-warn-strong);
+  --color-warn-edge: var(--hs-warn-edge);
+
+  --color-violet-soft: var(--hs-violet-soft);
+  --color-violet-strong: var(--hs-violet-strong);
+  --color-violet-edge: var(--hs-violet-edge);
+
+  --color-ok-soft: var(--hs-ok-soft);
+  --color-ok-strong: var(--hs-ok-strong);
+  --color-ok-edge: var(--hs-ok-edge);
+
+  --color-danger-soft: var(--hs-danger-soft);
+  --color-danger-strong: var(--hs-danger-strong);
+  --color-danger-edge: var(--hs-danger-edge);
+
+  --color-teal-soft: var(--hs-teal-soft);
+  --color-teal-strong: var(--hs-teal-strong);
+  --color-teal-edge: var(--hs-teal-edge);
+
+  --color-ok: var(--hs-ok-strong);
+  --color-warn: var(--hs-warn-strong);
+  --color-danger: var(--hs-danger-strong);
+  --color-info: var(--hs-info-strong);
+  --color-teal: var(--hs-teal-strong);
+  --color-violet: var(--hs-violet-strong);
 
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -47,50 +99,132 @@
   --radius-control: 10px;
 }
 
-/* --- Light (the default, and what the brand was designed in) -------------- */
+/* --- Light (the default, and what the brand was designed in) --------------
+   Every text/background pair below clears WCAG AA (4.5:1) at body size, and
+   every control boundary clears 1.4.11 (3:1). Where the original brand colour
+   did not — white on #ec4899 is 3.5:1, and #94a3b8 "faint" text was 2.6:1 —
+   the role is darkened rather than the brand redefined.
+   ------------------------------------------------------------------------- */
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
 
   --hs-brand: #ec4899;
+  --hs-brand-solid: #db2777;
+  --hs-on-brand: #ffffff;
   --hs-brand-deep: #be185d;
   --hs-bg: #fdf2f8;
   --hs-surface: #ffffff;
   --hs-surface-2: #fdf2f8;
   --hs-ink: #1f2937;
-  --hs-muted: #64748b;
-  --hs-faint: #94a3b8;
+  --hs-muted: #5a6675;
+  --hs-faint: #65717f;
   --hs-line: #f3e3ec;
-  --hs-input-border: #ecd7e3;
+  --hs-line-soft: #f8eef3;
+  --hs-edge: #b07f9a;
+  --hs-input-border: var(--hs-edge);
   --hs-hover: #fdf2f8;
   --hs-shadow: 0 1px 2px rgb(190 24 93 / 0.04);
   --hs-shadow-lift: 0 8px 24px -12px rgb(190 24 93 / 0.28);
   --hs-skeleton: linear-gradient(90deg, #fbeaf2 25%, #f7dfea 37%, #fbeaf2 63%);
+  --hs-scrim: rgb(31 41 55 / 0.45);
+
+  --hs-tint: #fdf2f8;
+  --hs-tint-strong: #fce7f3;
+
+  --hs-neutral-soft: #f1f5f9;
+  --hs-neutral-strong: #475569;
+  --hs-neutral-edge: #e2e8f0;
+
+  --hs-info-soft: #f0f9ff;
+  --hs-info-strong: #0369a1;
+  --hs-info-edge: #bae6fd;
+
+  --hs-warn-soft: #fffbeb;
+  --hs-warn-strong: #b45309;
+  --hs-warn-edge: #fde68a;
+
+  --hs-violet-soft: #f5f3ff;
+  --hs-violet-strong: #6d28d9;
+  --hs-violet-edge: #ddd6fe;
+
+  --hs-ok-soft: #ecfdf5;
+  --hs-ok-strong: #047857;
+  --hs-ok-edge: #a7f3d0;
+
+  --hs-danger-soft: #fef2f2;
+  --hs-danger-strong: #b91c1c;
+  --hs-danger-edge: #fecaca;
+
+  --hs-teal-soft: #f0fdfa;
+  --hs-teal-strong: #0f766e;
+  --hs-teal-edge: #99f6e4;
 }
 
 /* --- Dark ----------------------------------------------------------------
    Not "the light theme inverted": the pinks are lifted so they stay legible on
    a dark ground (a #BE185D heading on near-black fails contrast badly), and the
-   surfaces are warm rather than blue-black so the identity survives. Every
-   text/background pair here clears WCAG AA at body size.
+   surfaces are warm rather than blue-black so the identity survives.
+
+   The status tones are rebuilt rather than reused. Tailwind's `-50` fills are
+   near-white by construction, so carrying them into dark mode produces the
+   glowing blocks this theme used to have; each `soft` below is instead a deep
+   tint that sits 1.3:1 clear of the card it lands on, with a light `strong`
+   foreground over it. Every text pair here clears AA at body size.
    ------------------------------------------------------------------------- */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
   --hs-brand: #f472b6;
+  --hs-brand-solid: #f472b6;
+  --hs-on-brand: #2a0d1c;
   --hs-brand-deep: #f9a8d4;
   --hs-bg: #17121a;
   --hs-surface: #201a24;
   --hs-surface-2: #2a222f;
   --hs-ink: #f4eef4;
-  --hs-muted: #b6a9bb;
-  --hs-faint: #8d8093;
-  --hs-line: #362c3c;
-  --hs-input-border: #453a4c;
+  --hs-muted: #c0b3c5;
+  --hs-faint: #a89bae;
+  --hs-line: #3d3243;
+  --hs-line-soft: #322838;
+  --hs-edge: #756781;
+  --hs-input-border: var(--hs-edge);
   --hs-hover: #2c2331;
   --hs-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   --hs-shadow-lift: 0 10px 30px -14px rgb(0 0 0 / 0.7);
-  --hs-skeleton: linear-gradient(90deg, #2a222f 25%, #362c3c 37%, #2a222f 63%);
+  --hs-skeleton: linear-gradient(90deg, #2a222f 25%, #3d3243 37%, #2a222f 63%);
+  --hs-scrim: rgb(8 5 10 / 0.66);
+
+  --hs-tint: #3a2b43;
+  --hs-tint-strong: #4a3454;
+
+  --hs-neutral-soft: #34333d;
+  --hs-neutral-strong: #d2d2dc;
+  --hs-neutral-edge: #4a4954;
+
+  --hs-info-soft: #14344a;
+  --hs-info-strong: #8fd9fd;
+  --hs-info-edge: #2b5975;
+
+  --hs-warn-soft: #40300f;
+  --hs-warn-strong: #fcd34d;
+  --hs-warn-edge: #6d5313;
+
+  --hs-violet-soft: #3a2952;
+  --hs-violet-strong: #cbbdfd;
+  --hs-violet-edge: #574079;
+
+  --hs-ok-soft: #14382c;
+  --hs-ok-strong: #7cebbf;
+  --hs-ok-edge: #256048;
+
+  --hs-danger-soft: #552030;
+  --hs-danger-strong: #fdaeae;
+  --hs-danger-edge: #7d3040;
+
+  --hs-teal-soft: #133c3a;
+  --hs-teal-strong: #67ecd6;
+  --hs-teal-edge: #1f6360;
 }
 
 html,
@@ -156,8 +290,8 @@ body[data-cookie-notice="1"] {
   top: -60px;
   z-index: 100;
   transform: translateX(-50%);
-  background: var(--hs-brand);
-  color: #fff;
+  background: var(--hs-brand-solid);
+  color: var(--hs-on-brand);
   font-weight: 700;
   font-size: 0.875rem;
   padding: 0.6rem 1.1rem;
@@ -182,7 +316,7 @@ body[data-cookie-notice="1"] {
      cards does not feel like it is wobbling. */
   a.hs-card:hover,
   button.hs-card:hover {
-    border-color: var(--color-pink-400);
+    border-color: var(--hs-brand);
     box-shadow: var(--hs-shadow-lift);
     transform: translateY(-2px);
   }
@@ -201,15 +335,18 @@ body[data-cookie-notice="1"] {
     color: var(--hs-faint);
   }
   .hs-input:hover:not(:disabled):not(:focus) {
-    border-color: var(--color-pink-400);
+    border-color: var(--hs-brand);
   }
   .hs-input:focus {
     outline: none;
     border-color: var(--hs-brand);
-    box-shadow: 0 0 0 3px rgb(236 72 153 / 0.18);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hs-brand) 30%, transparent);
   }
+  /* `opacity` on a disabled control drags its text below AA. Dropping only the
+     saturation says "inert" without making it unreadable. */
   .hs-input:disabled {
-    opacity: 0.6;
+    background: var(--hs-surface-2);
+    color: var(--hs-muted);
     cursor: not-allowed;
   }
   textarea.hs-input {
@@ -234,28 +371,32 @@ body[data-cookie-notice="1"] {
   .hs-btn:active:not(:disabled) {
     transform: translateY(1px);
   }
+  /* A disabled control still has to be readable — the old 0.55 opacity put a
+     filled button's label under 3:1. Draining the colour rather than the
+     contrast says "inert" without hiding what the button says. */
   .hs-btn:disabled {
-    opacity: 0.55;
+    filter: grayscale(0.85);
+    opacity: 0.8;
     cursor: not-allowed;
   }
 
   .hs-btn-primary {
-    background: var(--hs-brand);
-    color: #fff;
+    background: var(--hs-brand-solid);
+    color: var(--hs-on-brand);
   }
   .hs-btn-primary:hover:not(:disabled) {
-    background: var(--color-pink-600);
+    background: var(--hs-brand-deep);
     box-shadow: var(--hs-shadow-lift);
   }
 
   .hs-btn-secondary {
     background: var(--hs-surface);
     color: var(--hs-brand-deep);
-    border: 1px solid var(--hs-input-border);
+    border: 1px solid var(--hs-edge);
   }
   .hs-btn-secondary:hover:not(:disabled) {
     background: var(--hs-hover);
-    border-color: var(--color-pink-400);
+    border-color: var(--hs-brand);
   }
 
   .hs-btn-ghost {
@@ -269,11 +410,11 @@ body[data-cookie-notice="1"] {
 
   .hs-btn-danger {
     background: var(--hs-surface);
-    color: var(--color-danger);
-    border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+    color: var(--hs-danger-strong);
+    border: 1px solid var(--hs-danger-edge);
   }
   .hs-btn-danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-danger) 10%, var(--hs-surface));
+    background: var(--hs-danger-soft);
   }
 
   .hs-label {
@@ -316,17 +457,6 @@ body[data-cookie-notice="1"] {
     text-transform: uppercase;
     color: var(--hs-faint);
   }
-}
-
-/* In dark mode the tinted status pills (bg-sky-50, bg-emerald-50 …) become
-   near-white blocks. Tailwind's own utilities cannot know that, so the pills
-   are darkened here in one place rather than every pill gaining a variant. */
-:root[data-theme="dark"] .hs-pill {
-  filter: brightness(0.34) saturate(1.7);
-  color: #fff;
-}
-:root[data-theme="dark"] .hs-pill * {
-  color: inherit;
 }
 
 /* ---------------------------------------------------------------------------
@@ -409,7 +539,7 @@ body[data-cookie-notice="1"] {
 .hs-route-progress span {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--color-pink-400), var(--hs-brand), var(--color-pink-600));
+  background: linear-gradient(90deg, var(--hs-brand), var(--hs-brand-solid), var(--hs-brand-deep));
   transform-origin: 0 50%;
   transition: transform 0.2s ease, opacity 0.3s ease;
 }
@@ -444,7 +574,7 @@ body[data-cookie-notice="1"] {
 .hs-scroll-progress span {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--color-pink-400), var(--hs-brand));
+  background: linear-gradient(90deg, var(--hs-brand), var(--hs-brand-deep));
   transform-origin: 0 50%;
   transform: scaleX(0);
 }
@@ -504,8 +634,8 @@ body[data-cookie-notice="1"] {
   background: var(--hs-hover);
 }
 .hs-theme-option.is-active {
-  background: var(--hs-brand);
-  color: #fff;
+  background: var(--hs-brand-solid);
+  color: var(--hs-on-brand);
 }
 
 /* --- Cookie notice ------------------------------------------------------- */
@@ -586,14 +716,14 @@ body[data-cookie-notice="1"] {
   animation: hs-enter 0.22s ease-out both;
 }
 .hs-feedback-error {
-  background: color-mix(in srgb, var(--color-danger) 12%, var(--hs-surface));
-  color: color-mix(in srgb, var(--color-danger) 78%, var(--hs-ink));
-  border: 1px solid color-mix(in srgb, var(--color-danger) 26%, transparent);
+  background: var(--hs-danger-soft);
+  color: var(--hs-danger-strong);
+  border: 1px solid var(--hs-danger-edge);
 }
 .hs-feedback-ok {
-  background: color-mix(in srgb, var(--color-ok) 14%, var(--hs-surface));
-  color: color-mix(in srgb, var(--color-ok) 72%, var(--hs-ink));
-  border: 1px solid color-mix(in srgb, var(--color-ok) 28%, transparent);
+  background: var(--hs-ok-soft);
+  color: var(--hs-ok-strong);
+  border: 1px solid var(--hs-ok-edge);
 }
 
 /* --- Modal --------------------------------------------------------------- */
@@ -606,7 +736,7 @@ body[data-cookie-notice="1"] {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgb(31 41 55 / 0.45);
+  background: var(--hs-scrim);
   backdrop-filter: blur(2px);
   animation: hs-fade 0.16s ease-out both;
 }
@@ -689,8 +819,8 @@ body[data-cookie-notice="1"] {
   width: 48px;
   height: 48px;
   border-radius: 999px;
-  background: var(--hs-brand);
-  color: #fff;
+  background: var(--hs-brand-solid);
+  color: var(--hs-on-brand);
   font-size: 1.25rem;
   font-weight: 700;
   box-shadow: var(--hs-shadow-lift);
@@ -699,7 +829,7 @@ body[data-cookie-notice="1"] {
 }
 .hs-contact-fab:hover {
   transform: scale(1.06);
-  background: var(--color-pink-600);
+  background: var(--hs-brand-deep);
 }
 .hs-contact-card {
   width: min(19rem, calc(100vw - 2rem));
@@ -722,7 +852,7 @@ body[data-cookie-notice="1"] {
   transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
 }
 .hs-search-hit:hover {
-  border-color: var(--color-pink-400);
+  border-color: var(--hs-brand);
   background: var(--hs-hover);
   transform: translateX(2px);
 }
@@ -786,7 +916,7 @@ body[data-cookie-notice="1"] {
 .hs-prose blockquote {
   margin: 0 0 1em;
   padding: 0.2em 0 0.2em 1em;
-  border-left: 3px solid var(--color-pink-300);
+  border-left: 3px solid var(--hs-brand);
   color: var(--hs-muted);
   font-style: italic;
 }
@@ -881,8 +1011,40 @@ body[data-cookie-notice="1"] {
     --hs-muted: #333;
     --hs-faint: #555;
     --hs-line: #ccc;
+    --hs-line-soft: #ddd;
+    --hs-edge: #999;
+    --hs-input-border: #999;
+    --hs-brand-solid: #fff;
+    --hs-on-brand: #000;
     --hs-shadow: none;
     --hs-shadow-lift: none;
+    --hs-scrim: transparent;
+
+    /* Every tone collapses to paper: a tinted pill costs toner and reads as a
+       smudge, so the pill's own border carries the distinction instead. */
+    --hs-tint: #fff;
+    --hs-tint-strong: #fff;
+    --hs-neutral-soft: #fff;
+    --hs-neutral-strong: #000;
+    --hs-neutral-edge: #999;
+    --hs-info-soft: #fff;
+    --hs-info-strong: #000;
+    --hs-info-edge: #999;
+    --hs-warn-soft: #fff;
+    --hs-warn-strong: #000;
+    --hs-warn-edge: #999;
+    --hs-violet-soft: #fff;
+    --hs-violet-strong: #000;
+    --hs-violet-edge: #999;
+    --hs-ok-soft: #fff;
+    --hs-ok-strong: #000;
+    --hs-ok-edge: #999;
+    --hs-danger-soft: #fff;
+    --hs-danger-strong: #000;
+    --hs-danger-edge: #999;
+    --hs-teal-soft: #fff;
+    --hs-teal-strong: #000;
+    --hs-teal-edge: #999;
   }
 
   html,

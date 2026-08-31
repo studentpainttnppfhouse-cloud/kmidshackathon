@@ -34,10 +34,10 @@ export function StatusButtons({
             onClick={() => startTransition(() => setAssignmentStatus(id, s))}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
               active
-                ? "bg-brand text-white"
+                ? "bg-brand-solid text-on-brand"
                 : locked
-                  ? "cursor-not-allowed bg-slate-50 text-slate-300"
-                  : "bg-pink-50 text-pink-700 hover:bg-pink-100"
+                  ? "cursor-not-allowed bg-neutral-soft text-faint"
+                  : "bg-tint text-brand-deep hover:bg-tint-strong"
             }`}
           >
             {STATUS_LABEL[s]}

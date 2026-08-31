@@ -93,7 +93,7 @@ export default async function SearchPage({
           <li key={`${hit.kind}-${hit.id}`}>
             <Link href={hit.href} className="hs-search-hit">
               <span className="mb-1 flex flex-wrap items-center gap-2">
-                <span className="hs-pill bg-pink-50 text-pink-700">{KIND_LABEL[hit.kind]}</span>
+                <span className="hs-pill bg-tint text-brand-deep">{KIND_LABEL[hit.kind]}</span>
                 <span className="text-sm font-bold text-ink">{hit.title}</span>
               </span>
               {hit.context ? (
@@ -114,7 +114,7 @@ function FilterChip({ label, href, active }: { label: string; href: string; acti
       href={href}
       aria-current={active ? "page" : undefined}
       className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-        active ? "bg-brand text-white" : "bg-surface text-muted hover:text-pink-700"
+        active ? "bg-brand-solid text-on-brand" : "bg-surface text-muted hover:text-brand-deep"
       }`}
     >
       {label}

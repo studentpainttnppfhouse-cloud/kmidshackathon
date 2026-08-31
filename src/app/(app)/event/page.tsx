@@ -93,7 +93,7 @@ export default async function EventPage({
               key={d}
               href={`/event?day=${d}`}
               className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-                day === d ? "bg-brand text-white" : "bg-surface text-muted hover:text-pink-700"
+                day === d ? "bg-brand-solid text-on-brand" : "bg-surface text-muted hover:text-brand-deep"
               }`}
             >
               Day {i + 1}
@@ -127,14 +127,14 @@ export default async function EventPage({
         <Card className="lg:col-span-2">
           <SectionTitle>Quick reference</SectionTitle>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-xl bg-pink-50 p-3">
+            <div className="rounded-xl bg-tint p-3">
               <dt className="hs-eyebrow">Emergency</dt>
-              <dd className="mt-0.5 text-lg font-extrabold text-pink-700">1669</dd>
+              <dd className="mt-0.5 text-lg font-extrabold text-brand-deep">1669</dd>
               <dd className="text-xs text-muted">School nurse · 7F-201</dd>
             </div>
-            <div className="rounded-xl bg-pink-50 p-3">
+            <div className="rounded-xl bg-tint p-3">
               <dt className="hs-eyebrow">Staff WiFi</dt>
-              <dd className="mt-0.5 font-mono text-sm font-bold text-pink-700">
+              <dd className="mt-0.5 font-mono text-sm font-bold text-brand-deep">
                 KMIDS-Event / hack2027
               </dd>
             </div>
@@ -163,13 +163,13 @@ export default async function EventPage({
                   key={item.id}
                   className={`flex gap-3 rounded-xl border p-3 ${
                     isNow
-                      ? "border-pink-400 bg-pink-50"
+                      ? "border-brand bg-tint"
                       : isNext
-                        ? "border-pink-200"
-                        : "border-[#f3e3ec]"
+                        ? "border-edge"
+                        : "border-line"
                   }`}
                 >
-                  <span className="w-24 shrink-0 font-mono text-sm font-bold text-pink-700">
+                  <span className="w-24 shrink-0 font-mono text-sm font-bold text-brand-deep">
                     {item.startTime}
                     {item.endTime ? (
                       <span className="block text-[11px] font-normal text-faint">
@@ -181,10 +181,10 @@ export default async function EventPage({
                     <span className="block text-sm font-bold text-ink">
                       {item.title}
                       {isNow ? (
-                        <span className="ml-2 hs-pill bg-brand text-white">Now</span>
+                        <span className="ml-2 hs-pill bg-brand-solid text-on-brand">Now</span>
                       ) : null}
                       {isNext ? (
-                        <span className="ml-2 hs-pill bg-pink-100 text-pink-700">Next</span>
+                        <span className="ml-2 hs-pill bg-tint-strong text-brand-deep">Next</span>
                       ) : null}
                     </span>
                     {item.location ? (
@@ -222,14 +222,14 @@ export default async function EventPage({
                     key={inc.id}
                     className={`rounded-xl border p-3 ${
                       inc.severity === "high"
-                        ? "border-red-200 bg-red-50"
+                        ? "border-danger-edge bg-danger-soft"
                         : inc.severity === "medium"
-                          ? "border-amber-200 bg-amber-50"
-                          : "border-[#f3e3ec]"
+                          ? "border-warn-edge bg-warn-soft"
+                          : "border-line"
                     }`}
                   >
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="hs-pill bg-white text-ink">{inc.severity}</span>
+                      <span className="hs-pill bg-surface text-ink">{inc.severity}</span>
                       <span className="text-[11px] text-faint">
                         {formatDateTime(inc.occurredAt)}
                       </span>
@@ -260,11 +260,11 @@ export default async function EventPage({
                 {reserves.map((r) => (
                   <span
                     key={r.id}
-                    className="flex items-center gap-1.5 rounded-full border border-[#f3e3ec] py-0.5 pl-0.5 pr-3 text-xs font-semibold"
+                    className="flex items-center gap-1.5 rounded-full border border-line py-0.5 pl-0.5 pr-3 text-xs font-semibold"
                   >
                     <Avatar name={r.name} nickname={r.nickname} url={r.avatarUrl} size={22} />
                     {r.nickname || r.name}
-                    <span className={r.isActive ? "text-emerald-600" : "text-faint"}>
+                    <span className={r.isActive ? "text-ok-strong" : "text-faint"}>
                       {r.isActive ? "· active" : "· standby"}
                     </span>
                   </span>

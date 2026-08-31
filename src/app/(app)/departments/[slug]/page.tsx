@@ -77,7 +77,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
 
   return (
     <div className="space-y-5">
-      <Link href="/departments" className="text-sm font-semibold text-pink-600">
+      <Link href="/departments" className="text-sm font-semibold text-brand-deep">
         ← All departments
       </Link>
 
@@ -96,7 +96,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
       </header>
 
       {!isMine ? (
-        <p className="rounded-xl bg-white px-4 py-2.5 text-xs text-faint">
+        <p className="rounded-xl bg-surface px-4 py-2.5 text-xs text-faint">
           You are viewing another department. Everything here is read-only for you.
         </p>
       ) : null}
@@ -121,7 +121,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
             action={
               <Link
                 href={`/assignments?view=board&dept=${d.slug}`}
-                className="text-sm font-semibold text-pink-600"
+                className="text-sm font-semibold text-brand-deep"
               >
                 Board
               </Link>
@@ -144,7 +144,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
           <Card>
             <SectionTitle
               action={
-                <Link href="/announcements" className="text-sm font-semibold text-pink-600">
+                <Link href="/announcements" className="text-sm font-semibold text-brand-deep">
                   All
                 </Link>
               }
@@ -156,7 +156,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
             ) : (
               <ul className="space-y-3">
                 {announcements.map((n) => (
-                  <li key={n.id} className="border-b border-[#f6ecf2] pb-3 last:border-0 last:pb-0">
+                  <li key={n.id} className="border-b border-line-soft pb-3 last:border-0 last:pb-0">
                     <p className="text-sm font-semibold text-ink">
                       {n.pinned ? "📌 " : ""}
                       {n.title}
@@ -174,7 +174,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
           <Card>
             <SectionTitle
               action={
-                <Link href="/documents" className="text-sm font-semibold text-pink-600">
+                <Link href="/documents" className="text-sm font-semibold text-brand-deep">
                   All
                 </Link>
               }
@@ -189,7 +189,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
                   <li key={doc.id} className="flex items-center justify-between gap-3">
                     <Link
                       href={`/documents/${doc.id}`}
-                      className="min-w-0 flex-1 truncate text-sm font-semibold text-ink hover:text-pink-700"
+                      className="min-w-0 flex-1 truncate text-sm font-semibold text-ink hover:text-brand-deep"
                     >
                       {doc.title}
                     </Link>
@@ -203,7 +203,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
           <Card>
             <SectionTitle
               action={
-                <Link href="/files" className="text-sm font-semibold text-pink-600">
+                <Link href="/files" className="text-sm font-semibold text-brand-deep">
                   All
                 </Link>
               }
@@ -220,7 +220,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
                       href={f.externalUrl}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="block truncate text-sm text-ink hover:text-pink-700"
+                      className="block truncate text-sm text-ink hover:text-brand-deep"
                     >
                       {f.name} ↗
                     </a>
@@ -239,14 +239,14 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
             <Link
               key={m.id}
               href={`/people/${m.id}`}
-              className="flex items-center gap-2.5 rounded-xl border border-[#f3e3ec] p-3 hover:border-pink-300"
+              className="flex items-center gap-2.5 rounded-xl border border-line p-3 hover:border-brand"
             >
               <Avatar name={m.name} nickname={m.nickname} url={m.avatarUrl} size={36} />
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-ink">
                   {m.nickname || m.name}
                   {m.id === d.headUserId ? (
-                    <span className="ml-1.5 text-[11px] font-bold text-pink-600">HEAD</span>
+                    <span className="ml-1.5 text-[11px] font-bold text-brand-deep">HEAD</span>
                   ) : null}
                 </span>
                 <span className="block truncate text-xs text-muted">{m.roleTitle ?? "Staff"}</span>

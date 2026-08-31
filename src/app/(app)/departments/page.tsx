@@ -48,7 +48,7 @@ export default async function DepartmentsPage() {
             <Link
               key={d.id}
               href={`/departments/${d.slug}`}
-              className={`hs-card p-5 transition hover:border-pink-300 ${
+              className={`hs-card p-5 transition hover:border-brand ${
                 mine ? "ring-1 ring-pink-200" : ""
               }`}
             >
@@ -60,7 +60,7 @@ export default async function DepartmentsPage() {
                 />
                 <span className="hs-h2">{d.name}</span>
                 {mine ? (
-                  <span className="hs-pill bg-pink-100 text-pink-700">Yours</span>
+                  <span className="hs-pill bg-tint-strong text-brand-deep">Yours</span>
                 ) : null}
               </span>
 

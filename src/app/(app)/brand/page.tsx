@@ -146,7 +146,7 @@ export default async function BrandPage() {
                             }}
                             label="Remove"
                             title={`Remove ${color.name}?`}
-                            className="hs-btn hs-btn-ghost px-2 py-1 text-[11px] text-red-600"
+                            className="hs-btn hs-btn-ghost px-2 py-1 text-[11px] text-danger-strong"
                           />
                         ) : null
                       }
@@ -253,7 +253,7 @@ export default async function BrandPage() {
           is the one piece of decoration in the system, so it stays thin, pink, and never louder
           than the content next to it.
         </p>
-        <div className="rounded-xl bg-pink-50 p-6 text-brand">
+        <div className="rounded-xl bg-tint p-6 text-brand">
           <Ecg className="w-full" />
         </div>
         <Divider />
@@ -268,7 +268,7 @@ export default async function BrandPage() {
       <Card>
         <SectionTitle
           action={
-            <Link href="/files/new" className="text-sm font-semibold text-pink-600">
+            <Link href="/files/new" className="text-sm font-semibold text-brand-deep">
               Add an asset
             </Link>
           }
@@ -288,9 +288,9 @@ export default async function BrandPage() {
                 href={safeHref(asset.externalUrl) ?? "#"}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="rounded-xl border border-line p-3 transition hover:border-pink-300"
+                className="rounded-xl border border-line p-3 transition hover:border-brand"
               >
-                <span className="hs-pill bg-pink-50 text-pink-700">{asset.kind}</span>
+                <span className="hs-pill bg-tint text-brand-deep">{asset.kind}</span>
                 <span className="mt-1.5 block text-sm font-bold text-ink">{asset.name} ↗</span>
                 <span className="block text-[11px] text-faint">{asset.department.name}</span>
               </a>
@@ -324,7 +324,7 @@ function Swatch({
       />
       <p className="text-sm font-bold text-ink">{name}</p>
       <div className="flex items-center justify-between gap-2">
-        <p className="font-mono text-xs text-pink-700">{hex}</p>
+        <p className="font-mono text-xs text-brand-deep">{hex}</p>
         <CopyButton value={hex} label="Copy" className="hs-btn hs-btn-ghost px-2 py-0.5 text-[11px]" />
       </div>
       {note ? <p className="mt-0.5 text-[11px] text-faint">{note}</p> : null}

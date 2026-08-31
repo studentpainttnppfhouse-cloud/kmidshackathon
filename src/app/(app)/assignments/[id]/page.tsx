@@ -60,7 +60,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="space-y-5">
-      <Link href="/assignments" className="text-sm font-semibold text-pink-600">
+      <Link href="/assignments" className="text-sm font-semibold text-brand-deep">
         ← All assignments
       </Link>
 
@@ -71,7 +71,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           <div className="min-w-0">
             <Link
               href={`/departments/${a.department.slug}`}
-              className="hs-eyebrow hover:text-pink-600"
+              className="hs-eyebrow hover:text-brand-deep"
             >
               {a.department.name}
             </Link>
@@ -92,7 +92,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
           <div>
             <dt className="hs-eyebrow">Due</dt>
-            <dd className={`mt-0.5 font-semibold ${overdue ? "text-red-600" : "text-ink"}`}>
+            <dd className={`mt-0.5 font-semibold ${overdue ? "text-danger-strong" : "text-ink"}`}>
               {formatDateLong(a.dueDate)}
             </dd>
           </div>
@@ -118,7 +118,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                   <Link
                     key={x.user.id}
                     href={`/people/${x.user.id}`}
-                    className="flex items-center gap-1.5 rounded-full bg-pink-50 py-0.5 pl-0.5 pr-2.5 text-xs font-semibold text-pink-700"
+                    className="flex items-center gap-1.5 rounded-full bg-tint py-0.5 pl-0.5 pr-2.5 text-xs font-semibold text-brand-deep"
                   >
                     <Avatar
                       name={x.user.name}
@@ -150,7 +150,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         ) : null}
 
         {mayEdit ? (
-          <div className="mt-5 border-t border-[#f6ecf2] pt-4">
+          <div className="mt-5 border-t border-line-soft pt-4">
             <p className="hs-eyebrow mb-2">Move this task</p>
             <StatusButtons id={a.id} current={a.status} canApprove={mayApprove} />
           </div>
@@ -171,8 +171,8 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                   url={c.user.avatarUrl}
                   size={30}
                 />
-                <div className="min-w-0 flex-1 rounded-xl bg-pink-50/70 px-3 py-2">
-                  <p className="text-xs font-semibold text-pink-700">
+                <div className="min-w-0 flex-1 rounded-xl bg-tint/70 px-3 py-2">
+                  <p className="text-xs font-semibold text-brand-deep">
                     {c.user.nickname || c.user.name}
                     <span className="ml-1.5 font-normal text-faint">{timeAgo(c.createdAt)}</span>
                   </p>

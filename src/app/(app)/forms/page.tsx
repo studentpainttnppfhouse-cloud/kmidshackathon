@@ -55,12 +55,12 @@ export default async function FormsPage() {
             return (
               <li
                 key={form.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3 transition hover:border-pink-300"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3 transition hover:border-brand"
               >
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-ink">
                     {internalSection ? (
-                      <Link href={`/forms/${form.id}`} className="hover:text-pink-700">
+                      <Link href={`/forms/${form.id}`} className="hover:text-brand-deep">
                         {form.title}
                       </Link>
                     ) : (
@@ -85,7 +85,7 @@ export default async function FormsPage() {
                     )}
                     <span>· {form.owner.nickname || form.owner.name}</span>
                     {form.deadline ? (
-                      <span className={overdue ? "font-semibold text-red-600" : ""}>
+                      <span className={overdue ? "font-semibold text-danger-strong" : ""}>
                         · closes {formatDateLong(form.deadline)}
                       </span>
                     ) : null}
@@ -94,7 +94,7 @@ export default async function FormsPage() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="hs-pill bg-pink-50 text-pink-700">
+                  <span className="hs-pill bg-tint text-brand-deep">
                     {form.type === "internal" ? form._count.responses : form.responseCount} responses
                   </span>
 

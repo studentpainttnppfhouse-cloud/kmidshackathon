@@ -297,8 +297,8 @@ function SourceCard({
       aria-pressed={active}
       className={`rounded-[10px] border p-3 text-left transition ${
         active
-          ? "border-pink-400 bg-pink-50/60 text-ink"
-          : "border-line text-muted hover:border-pink-300"
+          ? "border-brand bg-tint/60 text-ink"
+          : "border-line text-muted hover:border-brand"
       }`}
     >
       <span className="block text-sm font-bold">{title}</span>

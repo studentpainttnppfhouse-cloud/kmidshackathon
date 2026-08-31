@@ -63,7 +63,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="hs-enter space-y-5">
-      <Link href="/documents" className="hs-no-print text-sm font-semibold text-pink-600">
+      <Link href="/documents" className="hs-no-print text-sm font-semibold text-brand-deep">
         ← All documents
       </Link>
 
@@ -119,11 +119,11 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
 
       <div className="hs-no-print flex flex-wrap items-center gap-2">
         <DocStatusPill status={document.status} />
-        <span className="hs-pill bg-pink-50 text-pink-700">
+        <span className="hs-pill bg-tint text-brand-deep">
           {isPortalDoc ? "Written in the portal" : "Linked document"}
         </span>
         {tags.map((tag) => (
-          <span key={tag} className="hs-pill bg-slate-100 text-slate-600">
+          <span key={tag} className="hs-pill bg-neutral-soft text-neutral-strong">
             {tag}
           </span>
         ))}
@@ -138,12 +138,12 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
             Submitted for{" "}
             <Link
               href={`/assignments/${attachedTask.id}`}
-              className="font-semibold text-pink-700 hover:underline"
+              className="font-semibold text-brand-deep hover:underline"
             >
               {attachedTask.title}
             </Link>
           </p>
-          <span className="hs-pill bg-pink-50 text-pink-700">
+          <span className="hs-pill bg-tint text-brand-deep">
             {attachedTask.status.replace(/_/g, " ").toLowerCase()}
           </span>
         </div>
@@ -193,7 +193,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
             url={document.owner.avatarUrl}
             size={22}
           />
-          <Link href={`/people/${document.owner.id}`} className="hover:text-pink-600">
+          <Link href={`/people/${document.owner.id}`} className="hover:text-brand-deep">
             {document.owner.nickname || document.owner.name}
           </Link>
           · created {formatDateLong(document.createdAt)}

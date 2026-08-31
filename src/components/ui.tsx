@@ -101,8 +101,8 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[#f2d8e5] bg-white/60 px-6 py-10 text-center">
-      <Ecg className="w-24 text-pink-300" />
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-edge bg-surface/60 px-6 py-10 text-center">
+      <Ecg className="w-24 text-brand/40" />
       <p className="text-sm font-semibold text-ink">{title}</p>
       {hint ? <p className="max-w-sm text-sm text-muted">{hint}</p> : null}
       {action}
@@ -138,20 +138,20 @@ export function Ecg({ className = "", animate = false }: { className?: string; a
 
 export function Divider() {
   return (
-    <div className="my-6 flex items-center gap-3 text-pink-200" aria-hidden="true">
-      <span className="h-px flex-1 bg-[#f3e3ec]" />
+    <div className="my-6 flex items-center gap-3 text-brand/35" aria-hidden="true">
+      <span className="h-px flex-1 bg-line" />
       <Ecg className="w-16" animate />
-      <span className="h-px flex-1 bg-[#f3e3ec]" />
+      <span className="h-px flex-1 bg-line" />
     </div>
   );
 }
 
 const STATUS_STYLE: Record<AssignmentStatus, string> = {
-  NOT_STARTED: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-sky-50 text-sky-700",
-  NEEDS_REVIEW: "bg-amber-50 text-amber-700",
-  APPROVED: "bg-violet-50 text-violet-700",
-  DONE: "bg-emerald-50 text-emerald-700",
+  NOT_STARTED: "bg-neutral-soft text-neutral-strong",
+  IN_PROGRESS: "bg-info-soft text-info-strong",
+  NEEDS_REVIEW: "bg-warn-soft text-warn-strong",
+  APPROVED: "bg-violet-soft text-violet-strong",
+  DONE: "bg-ok-soft text-ok-strong",
 };
 
 export function StatusPill({ status }: { status: AssignmentStatus }) {
@@ -159,10 +159,10 @@ export function StatusPill({ status }: { status: AssignmentStatus }) {
 }
 
 const DOC_STYLE: Record<DocStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_REVIEW: "bg-amber-50 text-amber-700",
-  APPROVED: "bg-violet-50 text-violet-700",
-  PUBLISHED: "bg-emerald-50 text-emerald-700",
+  DRAFT: "bg-neutral-soft text-neutral-strong",
+  IN_REVIEW: "bg-warn-soft text-warn-strong",
+  APPROVED: "bg-violet-soft text-violet-strong",
+  PUBLISHED: "bg-ok-soft text-ok-strong",
 };
 
 export function DocStatusPill({ status }: { status: DocStatus }) {
@@ -170,10 +170,10 @@ export function DocStatusPill({ status }: { status: DocStatus }) {
 }
 
 const PRIORITY_STYLE: Record<Priority, string> = {
-  LOW: "bg-slate-100 text-slate-500",
-  MEDIUM: "bg-pink-50 text-pink-700",
-  HIGH: "bg-orange-50 text-orange-700",
-  URGENT: "bg-red-50 text-red-700",
+  LOW: "bg-neutral-soft text-neutral-strong",
+  MEDIUM: "bg-tint text-brand-deep",
+  HIGH: "bg-warn-soft text-warn-strong",
+  URGENT: "bg-danger-soft text-danger-strong",
 };
 
 export function PriorityPill({ priority }: { priority: Priority }) {
@@ -181,11 +181,11 @@ export function PriorityPill({ priority }: { priority: Priority }) {
 }
 
 const TIER_STYLE: Record<Tier, string> = {
-  T0_ADVISOR: "bg-teal-50 text-teal-700",
-  T1_MEMBER: "bg-slate-100 text-slate-600",
-  T2_HEAD: "bg-sky-50 text-sky-700",
-  T3_ADMIN: "bg-violet-50 text-violet-700",
-  T4_OWNER: "bg-pink-100 text-pink-700",
+  T0_ADVISOR: "bg-teal-soft text-teal-strong",
+  T1_MEMBER: "bg-neutral-soft text-neutral-strong",
+  T2_HEAD: "bg-info-soft text-info-strong",
+  T3_ADMIN: "bg-violet-soft text-violet-strong",
+  T4_OWNER: "bg-tint-strong text-brand-deep",
 };
 
 export function TierPill({ tier }: { tier: Tier }) {
@@ -234,7 +234,7 @@ export function Avatar({
 
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-pink-100 font-semibold text-pink-700"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-tint-strong font-semibold text-brand-deep"
       style={{ width: size, height: size, fontSize: size * 0.36 }}
       aria-hidden="true"
     >
@@ -249,10 +249,10 @@ export function ProgressBar({ value, label }: { value: number; label?: string })
     <div>
       <div className="mb-1 flex items-baseline justify-between text-xs text-muted">
         <span>{label}</span>
-        <span className="font-semibold text-pink-700">{pct}%</span>
+        <span className="font-semibold text-brand-deep">{pct}%</span>
       </div>
       <div
-        className="h-2 overflow-hidden rounded-full bg-pink-100"
+        className="h-2 overflow-hidden rounded-full bg-tint-strong"
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
@@ -277,10 +277,10 @@ export function Stat({
   href?: string;
 }) {
   const toneClass = {
-    default: "text-pink-700",
-    warn: "text-amber-600",
-    danger: "text-red-600",
-    ok: "text-emerald-600",
+    default: "text-brand-deep",
+    warn: "text-warn-strong",
+    danger: "text-danger-strong",
+    ok: "text-ok-strong",
   }[tone];
 
   const body = (
@@ -292,7 +292,7 @@ export function Stat({
 
   if (href) {
     return (
-      <Link href={href} className="hs-card block p-4 transition hover:border-pink-300">
+      <Link href={href} className="hs-card block p-4 transition hover:border-brand">
         {body}
       </Link>
     );
@@ -308,10 +308,10 @@ export function Banner({
   children: ReactNode;
 }) {
   const style = {
-    info: "bg-sky-50 text-sky-800 border-sky-100",
-    warn: "bg-amber-50 text-amber-800 border-amber-100",
-    danger: "bg-red-50 text-red-700 border-red-100",
-    ok: "bg-emerald-50 text-emerald-800 border-emerald-100",
+    info: "bg-info-soft text-info-strong border-info-edge",
+    warn: "bg-warn-soft text-warn-strong border-warn-edge",
+    danger: "bg-danger-soft text-danger-strong border-danger-edge",
+    ok: "bg-ok-soft text-ok-strong border-ok-edge",
   }[tone];
   return (
     <div className={`rounded-xl border px-4 py-3 text-sm ${style}`} role="status">

@@ -149,7 +149,7 @@ export default async function AdminPage() {
             {resets.map((r) => (
               <li
                 key={r.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warn-edge bg-warn-soft p-3"
               >
                 <div>
                   <p className="text-sm font-semibold text-ink">
@@ -209,7 +209,7 @@ export default async function AdminPage() {
                   <div className="min-w-0 flex-1">
                     <Link
                       href={`/people/${u.id}`}
-                      className="block truncate text-sm font-bold text-ink hover:text-pink-700"
+                      className="block truncate text-sm font-bold text-ink hover:text-brand-deep"
                     >
                       {u.nickname || u.name}
                       {u.id === viewer.id ? (

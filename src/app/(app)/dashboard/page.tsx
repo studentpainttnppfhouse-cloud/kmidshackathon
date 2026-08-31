@@ -153,7 +153,7 @@ export default async function DashboardPage({
         <Card className="lg:col-span-2">
           <SectionTitle
             action={
-              <Link href="/assignments?view=mine" className="text-sm font-semibold text-pink-600">
+              <Link href="/assignments?view=mine" className="text-sm font-semibold text-brand-deep">
                 See all
               </Link>
             }
@@ -178,7 +178,7 @@ export default async function DashboardPage({
         <Card>
           <SectionTitle
             action={
-              <Link href="/announcements" className="text-sm font-semibold text-pink-600">
+              <Link href="/announcements" className="text-sm font-semibold text-brand-deep">
                 All
               </Link>
             }
@@ -191,7 +191,7 @@ export default async function DashboardPage({
           ) : (
             <ul className="space-y-3">
               {announcements.map((n) => (
-                <li key={n.id} className="border-b border-[#f6ecf2] pb-3 last:border-0 last:pb-0">
+                <li key={n.id} className="border-b border-line-soft pb-3 last:border-0 last:pb-0">
                   <Link href="/announcements" className="block">
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
                       {n.pinned ? <span aria-label="Pinned">📌</span> : null}
@@ -236,7 +236,7 @@ export default async function DashboardPage({
                       <Link
                         key={d.id}
                         href={`/departments/${d.slug}`}
-                        className="rounded-xl border border-[#f3e3ec] p-3 transition hover:border-pink-300"
+                        className="rounded-xl border border-line p-3 transition hover:border-brand"
                       >
                         <span className="mb-1.5 flex items-center gap-2">
                           <span
@@ -265,7 +265,7 @@ export default async function DashboardPage({
               <ul className="space-y-2.5 text-sm">
                 {recent.map((r) => (
                   <li key={r.id} className="flex items-start gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-pink-300" />
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand/50" />
                     <span className="min-w-0">
                       <span className="font-medium text-ink">
                         {r.user?.nickname || r.user?.name || "System"}

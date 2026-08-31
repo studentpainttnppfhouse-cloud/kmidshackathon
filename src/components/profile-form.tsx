@@ -136,12 +136,12 @@ export function ProfileForm({
       </div>
 
       {state.error ? (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-strong">
           {state.error}
         </p>
       ) : null}
       {state.ok ? (
-        <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <p role="status" className="rounded-lg bg-ok-soft px-3 py-2 text-sm text-ok-strong">
           {state.ok}
         </p>
       ) : null}

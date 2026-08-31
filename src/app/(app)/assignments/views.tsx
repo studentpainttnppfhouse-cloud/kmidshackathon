@@ -3,6 +3,7 @@ import { Avatar, EmptyState, PriorityPill, StatusPill } from "@/components/ui";
 import { AssignmentRow, type AssignmentSummary } from "@/components/assignment-row";
 import { STATUS_LABEL, STATUS_ORDER } from "@/lib/constants";
 import { formatDate, isOverdue, relativeDue } from "@/lib/dates";
+import { swatchStyle } from "@/lib/color";
 
 export function BoardView({ items }: { items: AssignmentSummary[] }) {
   return (
@@ -10,12 +11,12 @@ export function BoardView({ items }: { items: AssignmentSummary[] }) {
       {STATUS_ORDER.map((status) => {
         const column = items.filter((a) => a.status === status);
         return (
-          <section key={status} className="rounded-2xl bg-white/70 p-3">
+          <section key={status} className="rounded-2xl bg-surface/50 p-3">
             <header className="mb-2 flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wide text-muted">
                 {STATUS_LABEL[status]}
               </h3>
-              <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-bold text-pink-700">
+              <span className="rounded-full bg-tint px-2 py-0.5 text-[11px] font-bold text-brand-deep">
                 {column.length}
               </span>
             </header>
@@ -25,7 +26,7 @@ export function BoardView({ items }: { items: AssignmentSummary[] }) {
                 <Link
                   key={a.id}
                   href={`/assignments/${a.id}`}
-                  className="block rounded-xl border border-[#f3e3ec] bg-white p-3 transition hover:border-pink-300"
+                  className="block rounded-xl border border-line bg-surface p-3 transition hover:border-brand"
                 >
                   <span
                     className="mb-1.5 block h-1 w-8 rounded-full"
@@ -37,7 +38,7 @@ export function BoardView({ items }: { items: AssignmentSummary[] }) {
                   </span>
                   <span
                     className={`mt-1.5 block text-[11px] ${
-                      isOverdue(a.dueDate, a.status) ? "font-semibold text-red-600" : "text-faint"
+                      isOverdue(a.dueDate, a.status) ? "font-semibold text-danger-strong" : "text-faint"
                     }`}
                   >
                     {relativeDue(a.dueDate)}
@@ -60,7 +61,7 @@ export function BoardView({ items }: { items: AssignmentSummary[] }) {
               ))}
 
               {column.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-[#f2d8e5] px-3 py-5 text-center text-xs text-faint">
+                <p className="rounded-xl border border-dashed border-edge px-3 py-5 text-center text-xs text-faint">
                   Empty
                 </p>
               ) : null}
@@ -83,7 +84,7 @@ export function ListView({ items }: { items: AssignmentSummary[] }) {
       <div className="hs-card hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#f3e3ec] text-left">
+            <tr className="border-b border-line text-left">
               {["Task", "Department", "Due", "Priority", "Status", "Assigned"].map((h) => (
                 <th key={h} className="px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-faint">
                   {h}
@@ -93,16 +94,16 @@ export function ListView({ items }: { items: AssignmentSummary[] }) {
           </thead>
           <tbody>
             {items.map((a) => (
-              <tr key={a.id} className="border-b border-[#f8eef3] last:border-0 hover:bg-pink-50/40">
+              <tr key={a.id} className="border-b border-line-soft last:border-0 hover:bg-tint/40">
                 <td className="px-4 py-2.5">
-                  <Link href={`/assignments/${a.id}`} className="font-semibold text-ink hover:text-pink-700">
+                  <Link href={`/assignments/${a.id}`} className="font-semibold text-ink hover:text-brand-deep">
                     {a.title}
                   </Link>
                 </td>
                 <td className="px-4 py-2.5 text-muted">{a.department.name}</td>
                 <td
                   className={`px-4 py-2.5 ${
-                    isOverdue(a.dueDate, a.status) ? "font-semibold text-red-600" : "text-muted"
+                    isOverdue(a.dueDate, a.status) ? "font-semibold text-danger-strong" : "text-muted"
                   }`}
                 >
                   {formatDate(a.dueDate)}
@@ -132,7 +133,7 @@ export function ListView({ items }: { items: AssignmentSummary[] }) {
         </table>
       </div>
 
-      <div className="hs-card divide-y divide-[#f8eef3] p-2 md:hidden">
+      <div className="hs-card divide-y divide-line-soft p-2 md:hidden">
         {items.map((a) => (
           <AssignmentRow key={a.id} a={a} />
         ))}
@@ -167,7 +168,7 @@ export function CalendarView({ items, month }: { items: AssignmentSummary[]; mon
 
   return (
     <div className="hs-card overflow-x-auto p-3">
-      <p className="mb-3 text-center text-sm font-bold text-pink-700">
+      <p className="mb-3 text-center text-sm font-bold text-brand-deep">
         {new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(month)}
       </p>
 
@@ -187,12 +188,12 @@ export function CalendarView({ items, month }: { items: AssignmentSummary[]; mon
             <div
               key={day}
               className={`min-h-[92px] rounded-lg border p-1.5 ${
-                isToday ? "border-pink-400 bg-pink-50/60" : "border-[#f3e3ec] bg-white"
+                isToday ? "border-brand bg-tint/60" : "border-line bg-surface"
               }`}
             >
               <p
                 className={`mb-1 text-[11px] font-bold ${
-                  isToday ? "text-pink-700" : "text-faint"
+                  isToday ? "text-brand-deep" : "text-faint"
                 }`}
               >
                 {day}
@@ -203,8 +204,8 @@ export function CalendarView({ items, month }: { items: AssignmentSummary[]; mon
                     key={a.id}
                     href={`/assignments/${a.id}`}
                     title={a.title}
-                    className="block truncate rounded px-1.5 py-0.5 text-[11px] font-medium text-white"
-                    style={{ background: a.department.color }}
+                    className="block truncate rounded px-1.5 py-0.5 text-[11px] font-medium"
+                    style={swatchStyle(a.department.color)}
                   >
                     {a.title}
                   </Link>

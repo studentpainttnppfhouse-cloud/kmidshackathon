@@ -138,12 +138,12 @@ export default async function DocumentsPage({
               </span>
 
               <span className="mb-2 flex flex-wrap gap-1">
-                <span className="hs-pill bg-pink-50 text-pink-700">
+                <span className="hs-pill bg-tint text-brand-deep">
                   {d.source === "portal" ? "In portal" : "Drive link"}
                 </span>
                 {Array.isArray(d.tags)
                   ? (d.tags as string[]).slice(0, 3).map((tag) => (
-                      <span key={tag} className="hs-pill bg-slate-100 text-slate-600">
+                      <span key={tag} className="hs-pill bg-neutral-soft text-neutral-strong">
                         {tag}
                       </span>
                     ))

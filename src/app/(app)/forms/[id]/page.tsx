@@ -47,7 +47,7 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="hs-enter space-y-5">
-      <Link href="/forms" className="hs-no-print text-sm font-semibold text-pink-600">
+      <Link href="/forms" className="hs-no-print text-sm font-semibold text-brand-deep">
         ← All forms
       </Link>
 
@@ -77,16 +77,16 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`hs-pill ${closed ? "bg-slate-100 text-slate-600" : "bg-emerald-50 text-emerald-700"}`}>
+        <span className={`hs-pill ${closed ? "bg-neutral-soft text-neutral-strong" : "bg-ok-soft text-ok-strong"}`}>
           {closed ? "Closed" : "Open"}
         </span>
         {form.deadline ? (
-          <span className="hs-pill bg-amber-50 text-amber-700">
+          <span className="hs-pill bg-warn-soft text-warn-strong">
             Closes {formatDateLong(form.deadline)}
           </span>
         ) : null}
         {manages ? (
-          <span className="hs-pill bg-pink-50 text-pink-700">
+          <span className="hs-pill bg-tint text-brand-deep">
             {responses.length} {responses.length === 1 ? "response" : "responses"}
           </span>
         ) : null}

@@ -41,7 +41,7 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
           ? `${inviter} added you to ${invite.department.name}`
           : `${inviter} invited you to the staff portal`
       }
-      footer={<>Already set up? <Link href="/login" className="font-semibold text-pink-600">Sign in</Link></>}
+      footer={<>Already set up? <Link href="/login" className="font-semibold text-brand-deep">Sign in</Link></>}
     >
       <InviteForm code={invite.code} email={invite.email} suggestedName={invite.name ?? ""} />
     </AuthShell>
