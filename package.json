@@ -9,6 +9,7 @@
     "prestart": "tsx scripts/db-bootstrap.ts || true",
     "start": "next start -p ${PORT:-3000}",
     "lint": "next lint",
+    "icons": "node scripts/generate-icons.mjs",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "tsx scripts/prisma.ts migrate dev",
