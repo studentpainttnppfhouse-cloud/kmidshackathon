@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { assertCan, requireViewer, isAdmin } from "@/lib/authorize";
 import { emailSchema, generateCode } from "@/lib/auth";
-import { INVITE_TTL_DAYS, RESET_TTL_HOURS, TIER_ORDER } from "@/lib/constants";
+import { INVITE_TTL_DAYS, RESET_TTL_HOURS, TIER_ORDER, tierForRole } from "@/lib/constants";
 import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/actions/auth";
 import type { Tier } from "@prisma/client";
@@ -28,24 +28,45 @@ const TIERS = [
 
 const inviteSchema = z.object({
   email: emailSchema,
-  name: z.string().trim().max(120).optional().or(z.literal("")),
+  name: z.string().trim().min(1, "Give the person's name.").max(120),
   roleTitle: z.string().trim().max(80).optional().or(z.literal("")),
   tier: z.enum(TIERS),
   departmentId: z.string().optional().or(z.literal("")),
 });
 
-export async function createInvite(_prev: FormState, formData: FormData): Promise<FormState> {
+/**
+ * An invite plus the link that goes with it.
+ *
+ * The link is handed straight back to the form rather than left to be dug out
+ * of the pending list: the portal sends no email, so "copy this and send it on
+ * LINE" is the entire delivery mechanism, and it should be one click away from
+ * the moment the invite exists.
+ */
+export type InviteState = FormState & { code?: string; email?: string };
+
+export async function createInvite(
+  _prev: InviteState,
+  formData: FormData,
+): Promise<InviteState> {
   const viewer = await requireViewer();
   assertCan(viewer, "manage_users", { kind: "user", userId: viewer.id });
 
   const limit = rateLimit(`write:${viewer.id}`, RULES.write);
   if (!limit.ok) return { error: retryMessage(limit.retryAfter) };
 
+  // Name and email are the whole required form. Everything else — team, role,
+  // tier — is optional here and set later from the user list, because getting
+  // somebody an account should not wait on deciding what they will be doing.
+  const roleTitle = String(formData.get("roleTitle") ?? "").trim();
+  const tierField = String(formData.get("tier") ?? "").trim();
+
   const parsed = inviteSchema.safeParse({
     email: formData.get("email") ?? "",
     name: formData.get("name") ?? "",
-    roleTitle: formData.get("roleTitle") ?? "",
-    tier: formData.get("tier") ?? "T1_MEMBER",
+    roleTitle,
+    // A role implies a tier. Posting no tier at all means "whatever the role
+    // says", and a role nobody recognises means the safest one.
+    tier: tierField || tierForRole(roleTitle) || "T1_MEMBER",
     departmentId: formData.get("departmentId") ?? "",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -86,7 +107,11 @@ export async function createInvite(_prev: FormState, formData: FormData): Promis
 
   await audit(viewer.id, "invite.created", { type: "invite", id: invite.id, detail: d.email });
   revalidatePath("/admin");
-  return { ok: `Invite ready. Copy the link from the pending list and send it to ${d.email}.` };
+  return {
+    ok: `Invite ready for ${d.name}. Copy the link and send it on LINE.`,
+    code: invite.code,
+    email: d.email,
+  };
 }
 
 export async function revokeInvite(id: string): Promise<void> {
@@ -148,6 +173,44 @@ export async function setUserDepartment(userId: string, departmentId: string): P
   });
   await audit(viewer.id, "user.department.changed", { type: "user", id: userId });
   revalidatePath("/admin");
+}
+
+/**
+ * Sets somebody's role on the staff chart, and the tier that role implies.
+ *
+ * The two travel together on purpose. A "Graphics Head" whose account is still
+ * T1 cannot approve their own team's work, which is the sort of mismatch that
+ * gets noticed the week of the event. The tier still cannot exceed the
+ * viewer's own, so this is not a way around the ceiling in setUserTier.
+ */
+export async function setUserRole(userId: string, roleTitle: string): Promise<void> {
+  const viewer = await requireViewer();
+  assertCan(viewer, "manage_users", { kind: "user", userId });
+
+  const title = String(roleTitle ?? "").trim().slice(0, 80);
+  const implied = title ? tierForRole(title) : null;
+
+  const target = await db.user.findUnique({ where: { id: userId }, select: { tier: true } });
+  if (!target) return;
+
+  // The role is free to change. The tier that comes with it only follows when
+  // the viewer holds that tier themselves, the target is not above them, and
+  // it is not the viewer's own account — the same three rules setUserTier
+  // enforces, because this is the same power by another name.
+  const promote =
+    implied !== null &&
+    userId !== viewer.id &&
+    TIER_ORDER[implied] <= TIER_ORDER[viewer.tier] &&
+    TIER_ORDER[target.tier] <= TIER_ORDER[viewer.tier];
+
+  await db.user.update({
+    where: { id: userId },
+    data: { roleTitle: title || null, ...(promote ? { tier: implied } : {}) },
+  });
+
+  await audit(viewer.id, "user.role.changed", { type: "user", id: userId, detail: title });
+  revalidatePath("/admin");
+  revalidatePath("/people");
 }
 
 export async function setUserFlag(userId: string, flag: UserFlag, value: boolean): Promise<void> {

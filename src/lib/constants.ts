@@ -90,11 +90,203 @@ export const DOC_STATUS_LABEL = {
   PUBLISHED: "Published",
 } as const;
 
-export const DEFAULT_DEPARTMENTS = [
-  { name: "Sponsorship & Partnerships", slug: "sponsorship", color: "#EC4899", icon: "handshake" },
-  { name: "Social Media & External Affairs", slug: "social", color: "#8B5CF6", icon: "megaphone" },
-  { name: "Film/Photo & Tech", slug: "film-tech", color: "#0EA5E9", icon: "camera" },
-  { name: "Documentation", slug: "documentation", color: "#F59E0B", icon: "file" },
-  { name: "Operations", slug: "operations", color: "#22C55E", icon: "cog" },
-  { name: "Mentorship", slug: "mentorship", color: "#2DD4BF", icon: "compass" },
-] as const;
+/**
+ * The 2027 staff chart, as the portal understands it.
+ *
+ * One list, three jobs: it seeds the departments, it fills the role dropdowns,
+ * and it says which permission tier a role implies. Keeping those together is
+ * what stops "Graphics (Head)" on the org chart from being a T1 account in the
+ * database.
+ *
+ * `slots` is the planned headcount from the chart, so an empty seat is visible
+ * before somebody notices the work is not being done. A team can go over it;
+ * nothing enforces the number.
+ *
+ * Roles map to tiers, not the other way round:
+ *
+ *   T4 Owner    Event director. One person.
+ *   T3 Admin    Deputy director, ops. Reads and writes across every team.
+ *   T2 Head     Runs one team: assigns inside it and approves its work.
+ *   T1 Member   The rest of the team.
+ *   T0 Advisor  Teachers. Reads and comments, deletes nothing.
+ */
+export type TeamRole = {
+  title: string;
+  tier: Tier;
+  /** Marks the one role that leads the team, for the chart and the badges. */
+  lead?: boolean;
+};
+
+export type Team = {
+  name: string;
+  slug: string;
+  color: string;
+  sortOrder: number;
+  slots: number;
+  description: string;
+  isGeneral?: boolean;
+  roles: TeamRole[];
+};
+
+export const TEAMS: readonly Team[] = [
+  {
+    name: "General",
+    slug: "general",
+    color: "#BE185D",
+    sortOrder: 0,
+    slots: 0,
+    isGeneral: true,
+    description: "All-staff space: brand assets, the master instruction doc, the schedule.",
+    roles: [],
+  },
+  {
+    name: "Management",
+    slug: "management",
+    color: "#BE185D",
+    sortOrder: 1,
+    slots: 3,
+    description: "Direction, timeline and the final call on anything that crosses two teams.",
+    roles: [
+      { title: "Event Director", tier: "T4_OWNER", lead: true },
+      { title: "Deputy Director", tier: "T3_ADMIN" },
+      { title: "Timeline / Ops Manager", tier: "T3_ADMIN" },
+    ],
+  },
+  {
+    name: "Marketing",
+    slug: "marketing",
+    color: "#EC4899",
+    sortOrder: 2,
+    slots: 3,
+    description: "Reaching the schools and the students: campaigns, posters, outreach.",
+    roles: [
+      { title: "Marketing Head", tier: "T2_HEAD", lead: true },
+      { title: "Marketing", tier: "T1_MEMBER" },
+    ],
+  },
+  {
+    name: "Accounting",
+    slug: "accounting",
+    color: "#22C55E",
+    sortOrder: 3,
+    slots: 1,
+    description: "Budget, receipts, reimbursements, and what the event actually costs.",
+    roles: [
+      { title: "Accounting Head", tier: "T2_HEAD", lead: true },
+      { title: "Accounting", tier: "T1_MEMBER" },
+    ],
+  },
+  {
+    name: "Sponsors & Partnerships",
+    slug: "sponsorship",
+    color: "#F59E0B",
+    sortOrder: 4,
+    slots: 3,
+    description: "Sponsor outreach, MOUs, tier packages, and the money that makes the event exist.",
+    roles: [
+      { title: "Sponsorship Head", tier: "T2_HEAD", lead: true },
+      { title: "Partnership Liaison", tier: "T1_MEMBER" },
+    ],
+  },
+  {
+    name: "Graphics",
+    slug: "graphics",
+    color: "#8B5CF6",
+    sortOrder: 5,
+    slots: 5,
+    description: "Every visual the event ships: key art, decks, signage, socials, certificates.",
+    roles: [
+      { title: "Graphics Head", tier: "T2_HEAD", lead: true },
+      { title: "Graphic Designer", tier: "T1_MEMBER" },
+    ],
+  },
+  {
+    name: "Judging Coordination",
+    slug: "judging",
+    color: "#0EA5E9",
+    sortOrder: 6,
+    slots: 3,
+    description: "Judges, briefings, scoring logistics and the judging run on the day.",
+    roles: [
+      { title: "Judging Head", tier: "T2_HEAD", lead: true },
+      { title: "Judging Coordinator", tier: "T1_MEMBER" },
+    ],
+  },
+  {
+    name: "MCs",
+    slug: "mcs",
+    color: "#F472B6",
+    sortOrder: 7,
+    slots: 3,
+    description: "The voice of the event: opening, transitions, awards, and the script behind them.",
+    roles: [{ title: "MC", tier: "T1_MEMBER" }],
+  },
+  {
+    name: "Documentation, Rubric & Registration",
+    slug: "documentation",
+    color: "#2DD4BF",
+    sortOrder: 8,
+    slots: 4,
+    description: "Proposals, the judging rubric, participant registration, and the paper trail.",
+    roles: [
+      { title: "Documentation Head", tier: "T2_HEAD", lead: true },
+      { title: "Documentation & Rubric", tier: "T1_MEMBER" },
+      { title: "Registration", tier: "T1_MEMBER" },
+    ],
+  },
+  {
+    name: "Social Media",
+    slug: "social",
+    color: "#DB2777",
+    sortOrder: 9,
+    slots: 3,
+    description: "Content calendar, posting, captions, and everything the public sees.",
+    roles: [
+      { title: "Social Media Head", tier: "T2_HEAD", lead: true },
+      { title: "Social Media", tier: "T1_MEMBER" },
+    ],
+  },
+  {
+    name: "Floaters",
+    slug: "floaters",
+    color: "#64748B",
+    sortOrder: 10,
+    slots: 3,
+    description: "Unassigned on purpose. Wherever the day is short-handed, they go there.",
+    roles: [{ title: "Floater", tier: "T1_MEMBER" }],
+  },
+  {
+    name: "Advisors",
+    slug: "advisors",
+    color: "#94A3B8",
+    sortOrder: 11,
+    slots: 0,
+    description: "Teachers and KMIDS staff overseeing the event.",
+    roles: [{ title: "Advisor", tier: "T0_ADVISOR" }],
+  },
+];
+
+/** Every role title in the chart, with the team it belongs to. */
+export const ROLE_OPTIONS: readonly { slug: string; title: string; tier: Tier; lead: boolean }[] =
+  TEAMS.flatMap((team) =>
+    team.roles.map((role) => ({
+      slug: team.slug,
+      title: role.title,
+      tier: role.tier,
+      lead: role.lead === true,
+    })),
+  );
+
+/**
+ * The tier a role title implies, or null for a title somebody typed by hand.
+ *
+ * A suggestion only. The admin form fills the tier select from this and the
+ * admin can still override it, because the chart is a plan and the account is
+ * the real thing.
+ */
+export function tierForRole(title: string): Tier | null {
+  const match = ROLE_OPTIONS.find(
+    (role) => role.title.toLowerCase() === title.trim().toLowerCase(),
+  );
+  return match ? match.tier : null;
+}

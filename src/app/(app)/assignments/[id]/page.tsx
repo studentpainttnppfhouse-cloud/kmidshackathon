@@ -51,7 +51,14 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     db.department.findMany({ orderBy: { sortOrder: "asc" } }),
     db.user.findMany({
       where: { deletedAt: null, isActive: true },
-      select: { id: true, name: true, nickname: true },
+      select: {
+        id: true,
+        name: true,
+        nickname: true,
+        avatarUrl: true,
+        departmentId: true,
+        roleTitle: true,
+      },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -193,6 +200,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
             people={people}
             canAssignOthers={mayAssign}
             canApprove={mayApprove}
+            viewerId={viewer.id}
             assignment={{
               id: a.id,
               title: a.title,

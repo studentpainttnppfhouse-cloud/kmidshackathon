@@ -460,6 +460,288 @@ body[data-cookie-notice="1"] {
 }
 
 /* ---------------------------------------------------------------------------
+   The composer — the two-column shape every "make one of these" form uses.
+
+   Left is what the thing is; right is the panel that routes it. The split is
+   the same one the navigation makes, so the page reads as one system rather
+   than a form somebody bolted a sidebar onto. Below 1024px it stacks, panel
+   last, because on a phone the title is the only field most people fill in.
+   --------------------------------------------------------------------------- */
+.hs-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .hs-composer {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    /* Both columns run to the height of the taller one, and the description
+       takes up the slack — otherwise a short task leaves a column of white
+       beside a full panel. */
+    align-items: stretch;
+  }
+  .hs-composer-notes {
+    flex: 1 1 auto;
+  }
+  .hs-composer-feedback,
+  .hs-composer-bar {
+    grid-column: 1 / -1;
+  }
+}
+
+.hs-composer-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* The title carries the page, so it is typed at heading size rather than into
+   a control that looks like every other control. Underline only: a box around
+   the first thing you touch reads as a form to fill in, not a thing to write. */
+.hs-composer-title {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid var(--hs-line);
+  border-radius: 0;
+  padding: 0.35rem 0 0.6rem;
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--hs-ink);
+  transition: border-color 0.15s ease;
+}
+.hs-composer-title::placeholder {
+  color: var(--hs-faint);
+  font-weight: 600;
+}
+.hs-composer-title:focus {
+  outline: none;
+  border-bottom-color: var(--hs-brand);
+}
+
+.hs-composer-notes {
+  width: 100%;
+  min-height: 9rem;
+  background: var(--hs-surface);
+  border: 1px solid var(--hs-input-border);
+  border-radius: var(--radius-control);
+  padding: 0.75rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--hs-ink);
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.hs-composer-notes::placeholder {
+  color: var(--hs-faint);
+}
+.hs-composer-notes:focus {
+  outline: none;
+  border-color: var(--hs-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hs-brand) 30%, transparent);
+}
+
+.hs-composer-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  background: var(--hs-surface-2);
+  border: 1px solid var(--hs-line);
+  border-radius: var(--radius-card);
+  padding: 0.875rem;
+}
+
+.hs-panel-block {
+  min-width: 0;
+}
+.hs-panel-block + .hs-panel-block {
+  border-top: 1px solid var(--hs-line);
+  padding-top: 0.875rem;
+}
+
+/* The commit row. Deliberately in the flow rather than pinned to the bottom of
+   the screen: pinned, it sits on top of the panel it belongs to and covers the
+   status options. Ctrl+Enter is the shortcut for anyone who does not want to
+   scroll to it. */
+.hs-composer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--hs-surface);
+  border-top: 1px solid var(--hs-line);
+  padding: 0.75rem 0 0.25rem;
+}
+
+/* --- The people picker --------------------------------------------------- */
+.hs-picker {
+  margin-top: 0.5rem;
+  max-height: 13rem;
+  overflow-y: auto;
+  border: 1px solid var(--hs-line);
+  border-radius: var(--radius-control);
+  background: var(--hs-surface);
+  padding: 0.25rem;
+}
+
+.hs-picker-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.875rem;
+  color: var(--hs-ink);
+  cursor: pointer;
+}
+.hs-picker-row:hover {
+  background: var(--hs-hover);
+}
+.hs-picker-row[aria-pressed="true"] {
+  background: var(--hs-tint-strong);
+  font-weight: 600;
+}
+.hs-picker-tick {
+  width: 1rem;
+  color: var(--hs-brand-deep);
+  font-weight: 700;
+}
+
+/* --- Chips --------------------------------------------------------------- */
+.hs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  background: var(--hs-brand-solid);
+  color: var(--hs-on-brand);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.hs-chip:hover {
+  background: var(--hs-brand-deep);
+}
+
+.hs-chip-toggle {
+  border-radius: 999px;
+  border: 1px solid var(--hs-edge);
+  background: var(--hs-surface);
+  color: var(--hs-muted);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.hs-chip-toggle:hover {
+  border-color: var(--hs-brand);
+  color: var(--hs-brand-deep);
+}
+.hs-chip-toggle[aria-pressed="true"] {
+  background: var(--hs-brand-solid);
+  border-color: var(--hs-brand-solid);
+  color: var(--hs-on-brand);
+}
+
+/* --- Segmented control ---------------------------------------------------
+   Native radios, restyled. Four priorities as one row of buttons is a single
+   glance and a single click; as a <select> it was a click, a scroll and a
+   read. The input stays in the DOM so the keyboard and the form post both
+   behave exactly as they always did. */
+.hs-seg {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+  background: var(--hs-surface);
+  border: 1px solid var(--hs-line);
+  border-radius: var(--radius-control);
+  padding: 0.25rem;
+}
+.hs-seg-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hs-seg-option input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.hs-seg-option span {
+  display: block;
+  border-radius: 7px;
+  padding: 0.35rem 0.3rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--hs-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.hs-seg-stack .hs-seg-option span {
+  text-align: left;
+  padding-left: 0.55rem;
+}
+.hs-seg-option:hover span {
+  background: var(--hs-hover);
+  color: var(--hs-brand-deep);
+}
+.hs-seg-option input:checked + span {
+  background: var(--hs-brand-solid);
+  color: var(--hs-on-brand);
+}
+.hs-seg-option input:focus-visible + span {
+  outline: 2px solid var(--hs-brand);
+  outline-offset: 1px;
+}
+.hs-seg-option input:disabled + span {
+  color: var(--hs-faint);
+  cursor: not-allowed;
+}
+.hs-seg-option input:disabled:hover + span {
+  background: transparent;
+}
+
+/* --- Disclosure ----------------------------------------------------------
+   For the fields that matter to one task in ten. Closed by default, so they
+   cost a click when they are needed and nothing when they are not. */
+.hs-disclosure {
+  border-top: 1px solid var(--hs-line);
+  padding-top: 0.75rem;
+}
+.hs-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--hs-brand-deep);
+  list-style: none;
+}
+.hs-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.hs-disclosure > summary::before {
+  content: "＋";
+  font-size: 0.75rem;
+  color: var(--hs-faint);
+}
+.hs-disclosure[open] > summary::before {
+  content: "−";
+}
+.hs-disclosure-note {
+  font-weight: 500;
+  color: var(--hs-faint);
+}
+
+/* ---------------------------------------------------------------------------
    The ECG motif — a heartbeat that traces itself. Decoration, so it stops
    entirely under prefers-reduced-motion.
    --------------------------------------------------------------------------- */
