@@ -1,5 +1,5 @@
 /**
- * Seeds the six departments, the event run sheet skeleton, and — the first
+ * Seeds the teams on the staff chart, the event run sheet skeleton, and — the first
  * time only — a T4 owner invite so somebody can actually get in.
  *
  * Safe to run repeatedly: everything is an upsert, and no existing user,
@@ -10,65 +10,26 @@
 import { PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { resolveDatabaseUrl } from "../src/lib/database-url";
-import { ALLOWED_EMAIL_DOMAIN } from "../src/lib/constants";
+import { ALLOWED_EMAIL_DOMAIN, TEAMS } from "../src/lib/constants";
 
 // Same TLS normalization the app uses, so seeding works with whatever string
 // was pasted into DATABASE_URL. See src/lib/database-url.ts.
 const datasourceUrl = resolveDatabaseUrl();
 const db = new PrismaClient(datasourceUrl ? { datasourceUrl } : undefined);
 
-const DEPARTMENTS = [
-  {
-    name: "Sponsorship & Partnerships",
-    slug: "sponsorship",
-    color: "#EC4899",
-    sortOrder: 1,
-    description: "Sponsor outreach, MOUs, tier packages, and the money that makes the event exist.",
-  },
-  {
-    name: "Social Media & External Affairs",
-    slug: "social",
-    color: "#8B5CF6",
-    sortOrder: 2,
-    description: "Content calendar, posting, captions, and everything the public sees.",
-  },
-  {
-    name: "Film/Photo & Tech",
-    slug: "film-tech",
-    color: "#0EA5E9",
-    sortOrder: 3,
-    description: "Cameras, edits, livestream, and the technical rig on the day.",
-  },
-  {
-    name: "Documentation",
-    slug: "documentation",
-    color: "#F59E0B",
-    sortOrder: 4,
-    description: "Proposals, reports, minutes, and the paper trail the school asks for.",
-  },
-  {
-    name: "Operations",
-    slug: "operations",
-    color: "#22C55E",
-    sortOrder: 5,
-    description: "Venue, schedule, logistics, food, safety, and run-of-show.",
-  },
-  {
-    name: "Mentorship",
-    slug: "mentorship",
-    color: "#2DD4BF",
-    sortOrder: 6,
-    description: "D-Day mentors, team pairing, and participant support.",
-  },
-  {
-    name: "General",
-    slug: "general",
-    color: "#BE185D",
-    sortOrder: 0,
-    isGeneral: true,
-    description: "All-staff space: brand assets, the master instruction doc, the schedule.",
-  },
-];
+/**
+ * The departments are the teams on the staff chart, straight out of
+ * src/lib/constants.ts. Seeding from the same list the role dropdowns read
+ * means a team can never exist in one place and not the other.
+ */
+const DEPARTMENTS = TEAMS.map((team) => ({
+  name: team.name,
+  slug: team.slug,
+  color: team.color,
+  sortOrder: team.sortOrder,
+  description: team.description,
+  isGeneral: team.isGeneral === true,
+}));
 
 const RUN_SHEET = [
   { day: "2027-03-19", startTime: "15:00", endTime: "18:00", title: "Venue setup", location: "Main Hall" },
@@ -84,6 +45,51 @@ const RUN_SHEET = [
   { day: "2027-03-21", startTime: "16:00", endTime: "17:00", title: "Closing & awards", location: "Main Hall" },
 ];
 
+/**
+ * Clears out departments that are no longer on the staff chart.
+ *
+ * The chart was rebuilt around the real 2027 teams, and an earlier seed had
+ * put a different six in. A leftover team is not harmless: it sits in every
+ * department dropdown, every filter and every picker, and somebody files work
+ * into it by accident.
+ *
+ * Only ever removes a department that holds nothing at all — no members, no
+ * tasks, no documents, no files, no forms, no announcements, no invites
+ * pointing at it. Anything with a single row in it is left exactly where it is
+ * and reported, because deleting a team's work to tidy up a list is not a
+ * trade this script gets to make.
+ */
+async function retireEmptyDepartments(): Promise<void> {
+  const keep = new Set(DEPARTMENTS.map((d) => d.slug));
+  const strays = await db.department.findMany({
+    where: { slug: { notIn: [...keep] } },
+    select: { id: true, name: true, slug: true },
+  });
+
+  for (const dept of strays) {
+    const where = { departmentId: dept.id };
+    const counts = await Promise.all([
+      db.user.count({ where }),
+      db.assignment.count({ where }),
+      db.document.count({ where }),
+      db.fileAsset.count({ where }),
+      db.form.count({ where }),
+      db.announcement.count({ where }),
+      db.invite.count({ where }),
+      db.department.count({ where: { headUserId: { not: null }, id: dept.id } }),
+    ]);
+
+    const held = counts.reduce((a, b) => a + b, 0);
+    if (held > 0) {
+      console.log(`  keeping "${dept.name}" — off the chart, but it still holds ${held} row(s).`);
+      continue;
+    }
+
+    await db.department.delete({ where: { id: dept.id } });
+    console.log(`  removed "${dept.name}" — off the chart and empty.`);
+  }
+}
+
 async function main() {
   console.log("Seeding departments…");
   for (const d of DEPARTMENTS) {
@@ -93,6 +99,8 @@ async function main() {
       update: { name: d.name, color: d.color, sortOrder: d.sortOrder, description: d.description },
     });
   }
+
+  await retireEmptyDepartments();
 
   console.log("Seeding run sheet…");
   const existingItems = await db.eventItem.count();

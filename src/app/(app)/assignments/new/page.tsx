@@ -28,7 +28,14 @@ export default async function NewAssignmentPage({
     db.department.findMany({ orderBy: { sortOrder: "asc" } }),
     db.user.findMany({
       where: { deletedAt: null, isActive: true },
-      select: { id: true, name: true, nickname: true, departmentId: true },
+      select: {
+        id: true,
+        name: true,
+        nickname: true,
+        avatarUrl: true,
+        departmentId: true,
+        roleTitle: true,
+      },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -88,11 +95,12 @@ export default async function NewAssignmentPage({
           departments={creatable.map((d) => ({ id: d.id, name: d.name }))}
           people={
             canAssignOthers
-              ? people.map((p) => ({ id: p.id, name: p.name, nickname: p.nickname }))
-              : [{ id: viewer.id, name: viewer.name, nickname: viewer.nickname }]
+              ? people
+              : people.filter((p) => p.id === viewer.id)
           }
           canAssignOthers={canAssignOthers}
           canApprove={canAssignOthers}
+          viewerId={viewer.id}
           defaultDepartmentId={preselect}
           defaultAssigneeIds={canAssignOthers ? [] : [viewer.id]}
         />

@@ -13,9 +13,11 @@ import {
   DepartmentSelect,
   FlagToggle,
   InviteForm,
+  RoleSelect,
   TierSelect,
 } from "@/components/admin-widgets";
 import { setEventPanelVisible } from "@/lib/actions/brand";
+import { TEAMS, TIER_LABEL } from "@/lib/constants";
 import { SETTING_KEYS, getSettings } from "@/lib/settings";
 import { Avatar, Banner, Card, EmptyState, PageHeader, SectionTitle, Stat } from "@/components/ui";
 import { formatDateLong, timeAgo } from "@/lib/dates";
@@ -93,13 +95,14 @@ export default async function AdminPage() {
       ) : null}
 
       <Card>
-        <SectionTitle>Invite staff</SectionTitle>
+        <SectionTitle>Add somebody to the portal</SectionTitle>
         <p className="mb-4 -mt-2 text-sm text-muted">
-          Registration is invite-only. Create the invite, copy the link, and send
-          it on LINE — the portal sends no email by design.
+          A name and an email is enough. Their team, role and tier can wait until the
+          chart settles — set them from the user list below whenever you like. The portal
+          sends no email by design, so copy the link it gives you and send it on LINE.
         </p>
         <InviteForm
-          departments={departments.map((d) => ({ id: d.id, name: d.name }))}
+          departments={departments.map((d) => ({ id: d.id, name: d.name, slug: d.slug }))}
           canCreateOwner={owner}
         />
       </Card>
@@ -198,6 +201,50 @@ export default async function AdminPage() {
       </Card>
 
       <Card>
+        <SectionTitle>The staff chart</SectionTitle>
+        <p className="mb-4 -mt-2 text-sm text-muted">
+          Every team, the seats it plans for, and who is in them. A team over its
+          planned size is fine — the number is the plan, not a limit.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {TEAMS.filter((team) => team.slots > 0).map((team) => {
+            const members = users.filter((u) => u.department?.name === team.name && u.isActive);
+            const lead = members.find((u) => u.tier === "T2_HEAD" || u.tier === "T4_OWNER");
+            const short = team.slots - members.length;
+
+            return (
+              <div key={team.slug} className="rounded-xl border border-line p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-bold text-ink">
+                    <span
+                      aria-hidden="true"
+                      className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle"
+                      style={{ background: team.color }}
+                    />
+                    {team.name}
+                  </p>
+                  <span
+                    className={`hs-pill shrink-0 ${
+                      short > 0 ? "bg-warn-soft text-warn-strong" : "bg-ok-soft text-ok-strong"
+                    }`}
+                  >
+                    {members.length}/{team.slots}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  {lead ? `Led by ${lead.nickname || lead.name}` : "No lead yet"}
+                  {short > 0 ? ` · ${short} seat${short > 1 ? "s" : ""} open` : ""}
+                </p>
+                <p className="mt-1.5 text-[11px] text-faint">
+                  {team.roles.map((role) => `${role.title} (${TIER_LABEL[role.tier]})`).join(" · ")}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card>
         <SectionTitle>Users</SectionTitle>
         <div className="space-y-2">
           {users.map((u) => {
@@ -224,17 +271,20 @@ export default async function AdminPage() {
                     </p>
                   </div>
 
-                  <TierSelect
-                    userId={u.id}
-                    current={u.tier}
-                    disabled={u.id === viewer.id}
-                    canSetOwner={owner}
-                  />
-                  <DepartmentSelect
-                    userId={u.id}
-                    current={u.departmentId}
-                    departments={departments.map((d) => ({ id: d.id, name: d.name }))}
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DepartmentSelect
+                      userId={u.id}
+                      current={u.departmentId}
+                      departments={departments.map((d) => ({ id: d.id, name: d.name }))}
+                    />
+                    <RoleSelect userId={u.id} current={u.roleTitle} />
+                    <TierSelect
+                      userId={u.id}
+                      current={u.tier}
+                      disabled={u.id === viewer.id}
+                      canSetOwner={owner}
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-2.5 flex flex-wrap items-center gap-4 border-t border-line pt-2.5">

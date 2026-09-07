@@ -15,13 +15,41 @@ Cumulative — each tier includes everything below it.
 | Tier | Who | Can do |
 | --- | --- | --- |
 | **T0 Advisor** | Teachers, KMIDS staff | Read broadly, comment, approve documents and assignments. Cannot create, edit, assign or delete anything. |
-| **T1 Member** | Designers, editors, writers, ops | Create work in their own department, edit what is assigned to them, own their documents and files, comment. |
-| **T2 Head** | The lead of each department | Everything in their own department: assign, approve, publish, delete, announce. Read-only everywhere else. |
-| **T3 Admin** | Lead Organizer, Coordinator, Sponsors Coordinator, Operations Manager | Full read/write across every department. Move people, publish all-staff announcements, read the incident log and the audit log. |
-| **T4 Owner** | Lead Organizer + one technical backup | Everything in T3, plus accounts and tiers, invites, password resets, session revocation, export and archive. |
+| **T1 Member** | Everyone else on a team | Create work in their own department, edit what is assigned to them, own their documents and files, comment. |
+| **T2 Head** | The head of each team | Everything in their own department: assign, approve, publish, delete, announce. Read-only everywhere else. |
+| **T3 Admin** | Deputy director, timeline/ops manager | Full read/write across every department. Move people, publish all-staff announcements, read the incident log and the audit log. |
+| **T4 Owner** | Event director + one technical backup | Everything in T3, plus accounts and tiers, invites, password resets, session revocation, export and archive. |
 
 Two people should hold T4 from the start. A single owner is a
 single point of failure for the whole portal.
+
+## Roles, and the tier each one carries
+
+The staff chart lives in `TEAMS` in `src/lib/constants.ts`. It is one list,
+and it does three jobs: it seeds the departments, it fills the role dropdowns
+in Admin, and it says which tier a role implies. Picking "Graphics Head" in
+Admin therefore moves the account to T2 as well — a head who cannot approve
+their own team's work is a mismatch that only gets noticed the week of the
+event.
+
+| Team | Seats | Roles → tier |
+| --- | --- | --- |
+| Management | 3 | Event Director → T4 · Deputy Director → T3 · Timeline/Ops Manager → T3 |
+| Marketing | 3 | Marketing Head → T2 · Marketing → T1 |
+| Accounting | 1 | Accounting Head → T2 · Accounting → T1 |
+| Sponsors & Partnerships | 3 | Sponsorship Head → T2 · Partnership Liaison → T1 |
+| Graphics | 5 | Graphics Head → T2 · Graphic Designer → T1 |
+| Judging Coordination | 3 | Judging Head → T2 · Judging Coordinator → T1 |
+| MCs | 3 | MC → T1 |
+| Documentation, Rubric & Registration | 4 | Documentation Head → T2 · Documentation & Rubric → T1 · Registration → T1 |
+| Social Media | 3 | Social Media Head → T2 · Social Media → T1 |
+| Floaters | 3 | Floater → T1 |
+| Advisors | — | Advisor → T0 |
+
+The tier a role implies is a **suggestion the admin can override**, and it is
+still bounded by the rules in `setUserTier`: nobody hands out a tier above
+their own, and nobody demotes somebody above them. Seats are the planned
+headcount, not a limit — a team can run over it.
 
 ## Flags
 

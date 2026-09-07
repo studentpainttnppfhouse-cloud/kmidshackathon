@@ -1,8 +1,8 @@
 # Hackathon Studio
 
-Staff portal for **KMIDS Hackathon 2027**. One workspace for six departments, so
-the work stops living in personal Drives, LINE chats and three different
-spreadsheets — and so it survives into 2028 instead of being rebuilt from
+Staff portal for **KMIDS Hackathon 2027**. One workspace for every team on the
+staff chart, so the work stops living in personal Drives, LINE chats and three
+different spreadsheets — and so it survives into 2028 instead of being rebuilt from
 scratch.
 
 **Stack:** Next.js 16 (App Router) · TypeScript · Tailwind v4 · Prisma ·
@@ -136,8 +136,10 @@ OWNER_EMAIL=you@kmids.ac.th npm run db:seed   # invite only
 
 ### 4. Add the team
 
-**Admin → Invite staff.** Enter a `@kmids.ac.th` address, pick a tier and a
-department, then **copy the invite link and send it on LINE**. The portal
+**Admin → Add somebody to the portal.** A name and a `@kmids.ac.th` address is
+all it takes; the team, role and tier can be set later from the user list, once
+the chart settles. The form hands back the invite link, so **copy it and send it
+on LINE**. The portal
 deliberately sends no email — that would mean adding SMTP credentials to the
 deployment, which the build plan rules out. Same for password resets: an owner
 generates a one-time link from Admin and hands it over.
