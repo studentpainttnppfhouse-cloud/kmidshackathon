@@ -2,7 +2,8 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import { SESSION_COOKIE, SESSION_TTL_DAYS } from "@/lib/constants";
+import { SESSION_TTL_DAYS } from "@/lib/constants";
+import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/cookies";
 import type { Viewer } from "@/lib/policy";
 
 export type { Viewer };
@@ -31,33 +32,6 @@ function expiryFromNow(): Date {
   return new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 }
 
-/**
- * One definition of the session cookie, so the renewal path below cannot drift
- * from the creation path and quietly drop a flag.
- *
- * `secure` is conditional rather than always-on because a local checkout runs
- * on http://localhost, where a Secure cookie is simply never sent and nobody
- * can sign in. In production `middleware.ts` refuses plain HTTP outright, so
- * the conditional can never resolve to false on a real request.
- *
- * `sameSite: "lax"` and not "strict": strict would drop the cookie on the
- * first navigation in from a LINE message, so a person following an invite
- * link would land on the sign-in page while already signed in. Lax still
- * blocks the cross-site POST that CSRF needs, and Server Actions add their own
- * Origin check on top.
- */
-function sessionCookieOptions() {
-  return {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    // A persistent cookie, not a session cookie — closing the browser, or the
-    // phone going to sleep for a month, must not require signing in again.
-    maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
-  };
-}
-
 export async function createSession(
   userId: string,
   meta: { userAgent?: string | null; ip?: string | null } = {},
@@ -80,9 +54,15 @@ export async function createSession(
 }
 
 /**
- * Resolve the current viewer, or null. Renews the cookie and the row whenever
- * the session is more than a day into its life, so an active user's login
- * rolls forward indefinitely and never quietly expires mid-event.
+ * Resolve the current viewer, or null. Renews the database row whenever the
+ * session is more than a day into its life, so an active user's login rolls
+ * forward indefinitely and never quietly expires mid-event.
+ *
+ * The cookie's own expiry is slid forward by `middleware.ts`, not here. This
+ * runs during render on most requests — a layout, a page — and Next only
+ * allows a cookie write inside a Server Action or a Route Handler, so writing
+ * one here threw "Cookies can only be modified in a Server Action or Route
+ * Handler" for every signed-in person whose session was a day old.
  */
 export async function getViewer(): Promise<Viewer | null> {
   const jar = await cookies();
@@ -102,12 +82,10 @@ export async function getViewer(): Promise<Viewer | null> {
 
   const dayMs = 24 * 60 * 60 * 1000;
   if (Date.now() - session.lastSeenAt.getTime() > dayMs) {
-    const expiresAt = expiryFromNow();
     await db.session.update({
       where: { id: session.id },
-      data: { lastSeenAt: new Date(), expiresAt },
+      data: { lastSeenAt: new Date(), expiresAt: expiryFromNow() },
     });
-    jar.set(SESSION_COOKIE, token, sessionCookieOptions());
   }
 
   return user as Viewer;

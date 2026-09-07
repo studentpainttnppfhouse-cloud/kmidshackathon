@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/cookies";
 
 /**
  * Transport and content-security policy, applied to every request.
  *
- * Two jobs:
+ * Three jobs:
  *
  *   1. Refuse plain HTTP. Render terminates TLS at its edge and forwards
  *      `x-forwarded-proto`, so the app is the only place that can tell whether
@@ -16,6 +17,12 @@ import { NextResponse, type NextRequest } from "next/server";
  *      escapes output correctly today; CSP is what keeps a future mistake from
  *      becoming an account takeover. The nonce is generated per request and
  *      Next.js picks it up automatically for its own bundles.
+ *
+ *   3. Slide the session cookie's expiry forward. A signed-in person must be
+ *      able to stay signed in for months without ever seeing the login page,
+ *      and the middleware is the only place on a normal page request where a
+ *      cookie may legally be written — Next rejects a write from a Server
+ *      Component, which is where the renewal used to live.
  */
 
 const PUBLIC_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml)$/i;
@@ -114,6 +121,19 @@ export function middleware(request: NextRequest): NextResponse {
   const isAsset = path.startsWith("/_next/") || PUBLIC_FILE.test(path);
   if (!isAsset) {
     response.headers.set("cache-control", "no-store, must-revalidate");
+  }
+
+  // --- 3. Rolling session cookie ------------------------------------------
+  // Re-stamped with a full TTL on every page view, so the browser's copy never
+  // ages out under an active user. Nothing is validated here: the token is
+  // opaque, and `getViewer()` still checks it against the database on every
+  // request, so refreshing a revoked or expired one grants nobody anything.
+  //
+  // GET pages only. A sign-out is a Server Action POST that clears this same
+  // cookie, and two Set-Cookie headers for one name on one response would race.
+  const sessionToken = request.cookies.get(SESSION_COOKIE)?.value;
+  if (sessionToken && request.method === "GET" && !isAsset) {
+    response.cookies.set(SESSION_COOKIE, sessionToken, sessionCookieOptions());
   }
 
   return response;
