@@ -16,6 +16,20 @@ export const metadata: Metadata = {
   },
   description: "Staff portal for KMIDS Hackathon 2027.",
   manifest: "/manifest.webmanifest",
+  // Declared here rather than left to Next's file conventions, so the tab icon
+  // is one grep away from the layout that ships it. The SVG is what modern
+  // browsers pick; the .ico is the fallback for the ones that ask for
+  // /favicon.ico regardless of what the page declares. All of them are built by
+  // scripts/generate-icons.mjs.
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: { url: "/apple-icon.png", sizes: "180x180" },
+  },
   appleWebApp: { capable: true, title: "Hackathon Studio", statusBarStyle: "default" },
   // The portal is invite-only staff data. It has no business in a search index.
   robots: { index: false, follow: false, nocache: true },

@@ -1,5 +1,20 @@
 import { Ecg } from "@/components/ui";
 
+/**
+ * The mark, on its brand tile.
+ *
+ * The heart is the same path public/icon.svg draws, so the logo in the sidebar
+ * and the icon in the browser tab are the same shape. Both come from
+ * scripts/generate-icons.mjs — change the curve there and copy it here, or the
+ * two drift apart. The tile stays a flat brand fill rather than the icon's
+ * gradient: the gradient's dark end has no contrast-checked token in dark mode,
+ * and a white heart on light pink is not readable.
+ */
+export const MARK_PATH =
+  "M32 48C20.5 39.5 12 32.5 12 25.5C12 19.5 16.8 15.5 22.4 15.5" +
+  "C26.6 15.5 30.2 18 32 21.4C33.8 18 37.4 15.5 41.6 15.5" +
+  "C47.2 15.5 52 19.5 52 25.5C52 32.5 43.5 39.5 32 48Z";
+
 export function Logo({ size = 40 }: { size?: number }) {
   return (
     <span
@@ -7,8 +22,8 @@ export function Logo({ size = 40 }: { size?: number }) {
       style={{ width: size, height: size }}
       aria-hidden="true"
     >
-      <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: size * 0.55 }}>
-        <path d="M12 21s-7.5-4.7-9.3-9A5.3 5.3 0 0 1 12 6.5a5.3 5.3 0 0 1 9.3 5.5C19.5 16.3 12 21 12 21z" />
+      <svg viewBox="0 0 64 64" fill="currentColor" style={{ width: size * 0.62 }}>
+        <path d={MARK_PATH} />
       </svg>
     </span>
   );
