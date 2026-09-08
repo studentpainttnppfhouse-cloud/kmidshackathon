@@ -19,6 +19,7 @@ import {
 import { setEventPanelVisible } from "@/lib/actions/brand";
 import { TEAMS, TIER_LABEL } from "@/lib/constants";
 import { SETTING_KEYS, getSettings } from "@/lib/settings";
+import { joinLinkStatus } from "@/lib/join-links";
 import { Avatar, Banner, Card, EmptyState, PageHeader, SectionTitle, Stat } from "@/components/ui";
 import { formatDateLong, timeAgo } from "@/lib/dates";
 
@@ -29,7 +30,7 @@ export default async function AdminPage() {
   const viewer = await requireTier("T3_ADMIN");
   const owner = isOwner(viewer);
 
-  const [users, invites, departments, resets, sessionCount, deletedCounts, settings] = await Promise.all([
+  const [users, invites, departments, resets, sessionCount, deletedCounts, settings, joinLinks] = await Promise.all([
     db.user.findMany({
       where: { deletedAt: null },
       include: {
@@ -59,12 +60,17 @@ export default async function AdminPage() {
       db.fileAsset.count({ where: { deletedAt: { not: null } } }),
     ]),
     getSettings([SETTING_KEYS.eventPanel]),
+    db.inviteLink.findMany({
+      where: { revokedAt: null },
+      select: { revokedAt: true, expiresAt: true, maxUses: true, useCount: true },
+    }),
   ]);
 
   const eventVisible = settings[SETTING_KEYS.eventPanel] === "1";
 
   const lockedOut = users.filter((u) => u.lockedUntil && u.lockedUntil.getTime() > Date.now());
   const recycleBin = deletedCounts.reduce((a, b) => a + b, 0);
+  const liveJoinLinks = joinLinks.filter((link) => joinLinkStatus(link) === "ok");
 
   return (
     <div className="hs-enter space-y-5">
@@ -80,9 +86,10 @@ export default async function AdminPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Active staff" value={users.filter((u) => u.isActive).length} />
         <Stat label="Pending invites" value={invites.length} />
+        <Stat label="Live join links" value={liveJoinLinks.length} />
         <Stat label="Live sessions" value={sessionCount} />
         <Stat label="Recycle bin" value={recycleBin} tone={recycleBin > 0 ? "warn" : "default"} />
       </div>
@@ -105,6 +112,19 @@ export default async function AdminPage() {
           departments={departments.map((d) => ({ id: d.id, name: d.name, slug: d.slug }))}
           canCreateOwner={owner}
         />
+
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-tint/50 p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-ink">Adding a whole room at once?</p>
+            <p className="text-xs text-muted">
+              One link and one QR code the team scans, instead of an invite each. Live links,
+              their remaining uses, and the printable poster all live there.
+            </p>
+          </div>
+          <Link href="/admin/invite" className="hs-btn hs-btn-secondary shrink-0">
+            Join links &amp; QR codes
+          </Link>
+        </div>
       </Card>
 
       <Card>

@@ -1,26 +1,78 @@
 "use client";
 
-import { useActionState } from "react";
-import { createAnnouncement, createFile, createForm } from "@/lib/actions/content";
+import { useActionState, useState } from "react";
+import {
+  createAnnouncement,
+  createFile,
+  createForm,
+  uploadFileAsset,
+} from "@/lib/actions/content";
 import type { FormState } from "@/lib/actions/auth";
 import { Feedback, SubmitButton } from "@/components/form-bits";
+import { formatBytes } from "@/lib/attachments";
+import { DraftKeeper } from "@/components/draft-keeper";
 
 
 const initial: FormState = {};
 
 type Dept = { id: string; name: string };
 
-export function FileForm({ departments }: { departments: Dept[] }) {
-  const [state, action] = useActionState(createFile, initial);
+/**
+ * Adding an asset: the file itself, or a link to it.
+ *
+ * Upload is the default because it is what people expect and what they
+ * actually want — the link path exists for the files that genuinely cannot
+ * live here. The two modes are one form with one submit button rather than two
+ * pages, so choosing wrong costs a click and not a re-typed set of tags.
+ */
+export function FileForm({
+  departments,
+  maxBytes,
+}: {
+  departments: Dept[];
+  /** The server's limit, passed down: see the note in components/attachments.tsx. */
+  maxBytes: number;
+}) {
+  const [mode, setMode] = useState<"upload" | "link">("upload");
+  const [uploadState, uploadAction] = useActionState(uploadFileAsset, initial);
+  const [linkState, linkAction] = useActionState(createFile, initial);
+  const [oversize, setOversize] = useState<{ name: string; size: number } | null>(null);
+
+  const state = mode === "upload" ? uploadState : linkState;
 
   return (
-    <form action={action} className="space-y-4">
+    <form action={mode === "upload" ? uploadAction : linkAction} className="space-y-4">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="How to add this asset">
+        <button
+          type="button"
+          onClick={() => setMode("upload")}
+          aria-pressed={mode === "upload"}
+          className={`hs-btn px-3 py-1.5 text-xs ${mode === "upload" ? "hs-btn-primary" : "hs-btn-ghost"}`}
+        >
+          Upload the file
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("link")}
+          aria-pressed={mode === "link"}
+          className={`hs-btn px-3 py-1.5 text-xs ${mode === "link" ? "hs-btn-primary" : "hs-btn-ghost"}`}
+        >
+          Link to Drive or Canva
+        </button>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="hs-label" htmlFor="file-name">
             Asset name
           </label>
-          <input id="file-name" name="name" required className="hs-input" placeholder="Poster template A3" />
+          <input
+            id="file-name"
+            name="name"
+            required
+            className="hs-input"
+            placeholder="Poster template A3"
+          />
         </div>
         <div>
           <label className="hs-label" htmlFor="file-dept">
@@ -36,44 +88,82 @@ export function FileForm({ departments }: { departments: Dept[] }) {
         </div>
       </div>
 
-      <div>
-        <label className="hs-label" htmlFor="file-url">
-          Drive / Canva link
-        </label>
-        <input
-          id="file-url"
-          name="externalUrl"
-          type="url"
-          required
-          className="hs-input"
-          placeholder="https://drive.google.com/…"
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
+      {mode === "upload" ? (
         <div>
-          <label className="hs-label" htmlFor="file-kind">
-            Kind
-          </label>
-          <select id="file-kind" name="kind" defaultValue="link" className="hs-input">
-            {["link", "image", "pdf", "video", "design", "font", "logo"].map((k) => (
-              <option key={k} value={k}>
-                {k}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="hs-label" htmlFor="file-tags">
-            Tags
+          <label className="hs-label" htmlFor="file-upload">
+            The file
           </label>
           <input
-            id="file-tags"
-            name="tags"
-            className="hs-input"
-            placeholder="brand, event-day, 2026-archive"
+            id="file-upload"
+            name="file"
+            type="file"
+            required
+            className="hs-input file:mr-3 file:rounded-lg file:border-0 file:bg-tint file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-brand-deep"
+            onChange={(event) => {
+              const picked = event.target.files?.[0];
+              // Told before the upload rather than after it: on a phone the
+              // difference is a minute of watching a progress bar fail.
+              if (picked && picked.size > maxBytes) {
+                setOversize({ name: picked.name, size: picked.size });
+                event.target.value = "";
+                return;
+              }
+              setOversize(null);
+            }}
           />
+          <p className="mt-1.5 text-xs text-faint">
+            Up to {formatBytes(maxBytes)}. It goes into the portal database, so every device that
+            signs in can open it and a redeploy does not touch it.
+          </p>
+
+          {oversize ? (
+            <p role="alert" className="hs-feedback hs-feedback-error mt-2">
+              <span aria-hidden="true">⚠</span> {oversize.name} is {formatBytes(oversize.size)}.
+              Put it in Drive and switch to &ldquo;Link to Drive or Canva&rdquo; above.
+            </p>
+          ) : null}
         </div>
+      ) : (
+        <>
+          <div>
+            <label className="hs-label" htmlFor="file-url">
+              Drive / Canva link
+            </label>
+            <input
+              id="file-url"
+              name="externalUrl"
+              type="url"
+              required
+              className="hs-input"
+              placeholder="https://drive.google.com/…"
+            />
+          </div>
+
+          <div>
+            <label className="hs-label" htmlFor="file-kind">
+              Kind
+            </label>
+            <select id="file-kind" name="kind" defaultValue="link" className="hs-input">
+              {["link", "image", "pdf", "video", "design", "font", "logo"].map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+
+      <div>
+        <label className="hs-label" htmlFor="file-tags">
+          Tags
+        </label>
+        <input
+          id="file-tags"
+          name="tags"
+          className="hs-input"
+          placeholder="brand, event-day, 2026-archive"
+        />
       </div>
 
       <label className="flex items-center gap-2 text-sm text-muted">
@@ -82,8 +172,11 @@ export function FileForm({ departments }: { departments: Dept[] }) {
       </label>
 
       <Feedback state={state} />
-      <SubmitButton className="hs-btn hs-btn-primary" pendingLabel="Linking…">
-        Link asset
+      <SubmitButton
+        className="hs-btn hs-btn-primary"
+        pendingLabel={mode === "upload" ? "Uploading…" : "Linking…"}
+      >
+        {mode === "upload" ? "Upload asset" : "Link asset"}
       </SubmitButton>
     </form>
   );
@@ -158,6 +251,7 @@ export function AnnouncementForm({
         Pin to the top
       </label>
 
+      <DraftKeeper formKey="announcement:new" />
       <Feedback state={state} />
       <SubmitButton className="hs-btn hs-btn-primary" pendingLabel="Posting…">
         Post announcement

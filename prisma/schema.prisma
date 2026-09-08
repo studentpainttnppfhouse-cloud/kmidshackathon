@@ -45,6 +45,9 @@ model User {
   tier         Tier    @default(T1_MEMBER)
   departmentId String?
 
+  /// Set when the account was created by scanning or opening a join link.
+  joinedViaLinkId String?
+
   isReserve Boolean @default(false)
   isMentor  Boolean @default(false)
   isAlumni  Boolean @default(false)
@@ -66,6 +69,9 @@ model User {
   sessions          Session[]
   passwordResets    PasswordReset[]
   invitesSent       Invite[]             @relation("InviteInvitedBy")
+  inviteLinks       InviteLink[]         @relation("InviteLinkCreatedBy")
+  joinedVia         InviteLink?          @relation("InviteLinkJoiners", fields: [joinedViaLinkId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  attachments       Attachment[]
   assignmentsMade   Assignment[]         @relation("AssignmentCreatedBy")
   assignmentsOwned  AssignmentAssignee[]
   comments          Comment[]
@@ -81,6 +87,7 @@ model User {
 
   @@index([departmentId])
   @@index([tier])
+  @@index([joinedViaLinkId])
   @@map("users")
 }
 
@@ -169,6 +176,8 @@ model Department {
   head          User?          @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   members       User[]         @relation("DepartmentMembers")
   invites       Invite[]
+  inviteLinks   InviteLink[]
+  attachments   Attachment[]
   assignments   Assignment[]
   documents     Document[]
   files         FileAsset[]
@@ -315,7 +324,9 @@ model FileAsset {
   id           String  @id @default(cuid())
   name         String
   description  String? @db.Text
-  externalUrl  String  @db.Text
+  /// Set for kind = "link". Null for an asset uploaded into the portal, whose
+  /// bytes are an Attachment with parentType = "file" and parentId = this id.
+  externalUrl  String? @db.Text
   kind         String  @default("link")
   departmentId String
   uploadedById String
@@ -531,4 +542,132 @@ model Setting {
   updatedAt DateTime @updatedAt
 
   @@map("settings")
+}
+
+// ---------------------------------------------------------------------------
+// Join links — the organisation invite, the way Teams does it
+// ---------------------------------------------------------------------------
+
+/// One link the whole team can use, instead of one invite per person.
+///
+/// The per-email `Invite` above still exists and is still the precise tool: it
+/// names one address and burns itself on first use. A join link is the other
+/// half — the thing you print on a poster, paste in the LINE group, or put on
+/// a slide at the first staff meeting so sixty people register themselves in
+/// the five minutes you have their attention.
+///
+/// What keeps it from being an open sign-up page:
+///
+///   - the email domain is still enforced, so only @kmids.ac.th can register;
+///   - the tier it grants is capped (see JOIN_LINK_MAX_TIER) — a self-serve
+///     link can never mint an admin, whoever gets hold of it;
+///   - uses, expiry and revocation are all first-class, so a leaked link is a
+///     link you switch off;
+///   - `users.joinedViaLinkId` records which link an account came through, so
+///     a bad one can be traced after the fact rather than guessed at.
+model InviteLink {
+  id    String @id @default(cuid())
+  code  String @unique @db.VarChar(64)
+  /// What the link is for, in the admin list: "Staff meeting poster", "LINE".
+  label String
+
+  tier         Tier    @default(T1_MEMBER)
+  departmentId String?
+  roleTitle    String?
+
+  createdById String
+  /// Null means unlimited. A number is a hard ceiling, checked on every use.
+  maxUses     Int?
+  useCount    Int    @default(0)
+
+  /// Null means it never expires on its own.
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  createdBy  User        @relation("InviteLinkCreatedBy", fields: [createdById], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  joiners    User[]      @relation("InviteLinkJoiners")
+
+  @@index([createdById])
+  @@index([departmentId])
+  @@map("invite_links")
+}
+
+// ---------------------------------------------------------------------------
+// Attachments — files, in the database, revising decision D2-1
+// ---------------------------------------------------------------------------
+
+/// A file somebody attached, wherever they attached it.
+///
+/// The original design stored links only, because Render wipes its disk on
+/// every deploy and "upload" therefore meant "lose it next Tuesday". That
+/// reasoning was about the *disk*. The database is not the disk: TiDB survives
+/// every redeploy the disk does not, so the bytes go there instead, in
+/// `attachment_chunks`, and a file attached from a phone at the back of a
+/// classroom is still there after the next deploy.
+///
+/// Two storage modes, chosen by size rather than by the person uploading:
+///
+///   "db"   — the bytes are in attachment_chunks. Anything up to the limit in
+///            src/lib/attachments.ts.
+///   "link" — over the limit. The row keeps the name and the URL of wherever
+///            the file actually lives, so a 400MB export video is still
+///            findable from the task it belongs to.
+///
+/// `parentType` + `parentId` are polymorphic for the same reason `comments`
+/// are: TiDB enforces no foreign keys here anyway, so a discriminator column
+/// costs nothing a real relation would have given us. Permission is never
+/// stored on the attachment — it is always re-derived from the parent, so a
+/// task that moves department takes its files with it.
+model Attachment {
+  id         String @id @default(cuid())
+  parentType String @db.VarChar(32)
+  parentId   String
+
+  name     String @db.VarChar(255)
+  /// Sanitised on the way in; see safeMimeType(). Never trusted from the browser.
+  mimeType String @db.VarChar(120)
+  size     Int
+  /// SHA-256 of the bytes. Lets a re-upload be spotted, and a download verified.
+  checksum String @default("") @db.VarChar(64)
+
+  /// "db" or "link".
+  storage     String  @default("db") @db.VarChar(8)
+  externalUrl String? @db.Text
+
+  /// Copied from the parent at upload time, for the department filter only.
+  departmentId String?
+  uploadedById String
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  uploadedBy User              @relation(fields: [uploadedById], references: [id])
+  department Department?       @relation(fields: [departmentId], references: [id])
+  chunks     AttachmentChunk[]
+
+  @@index([parentType, parentId])
+  @@index([uploadedById])
+  @@index([departmentId])
+  @@map("attachments")
+}
+
+/// The bytes, split up.
+///
+/// One row per 256 KB. TiDB caps the size of a single transaction entry, and a
+/// 10 MB LONGBLOB in one row is a row every `SELECT *` on the table has to drag
+/// through the network — so the file is written in pieces and streamed back the
+/// same way, one chunk in memory at a time rather than the whole thing.
+model AttachmentChunk {
+  id           String @id @default(cuid())
+  attachmentId String
+  idx          Int
+  bytes        Bytes  @db.MediumBlob
+
+  attachment Attachment @relation(fields: [attachmentId], references: [id])
+
+  @@unique([attachmentId, idx])
+  @@map("attachment_chunks")
 }

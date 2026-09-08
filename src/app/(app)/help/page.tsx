@@ -106,10 +106,34 @@ export default async function HelpPage() {
               q: "Can I upload a file?",
               a: (
                 <>
-                  Not to the portal itself, on purpose. Render wipes its disk on every deploy, so
-                  an uploaded file would disappear the next time the portal updated. Keep the bytes
-                  in Drive or Canva and link them from Files &amp; Assets — the portal is the
-                  index, not the drive.
+                  Yes. Files go into the portal database, not onto the server&rsquo;s disk, so a
+                  deploy does not touch them and every device you sign in on sees the same file.
+                  Attach them to a task, a document or an announcement, or file them in{" "}
+                  <Link href="/files/new">Files &amp; Assets</Link>. Picking a file uploads it
+                  straight away — there is no second button to press. Anything over the size limit
+                  the page shows stays in Drive or Canva, and the portal keeps the name and the
+                  link so the task still says the file exists.
+                </>
+              ),
+            },
+            {
+              q: "Who can attach a file to a task?",
+              a: (
+                <>
+                  Whoever set the task and whoever it is set for, plus the head of that team and
+                  the admins above them. Anyone who can read the task can open its files. It is the
+                  same rule as editing the task, because attaching a file is a claim about it.
+                </>
+              ),
+            },
+            {
+              q: "I closed the tab halfway through writing something.",
+              a: (
+                <>
+                  Open the same form again. What you typed is kept in this browser as you go and
+                  gets put back into an empty box, with a note saying so. It stays on this device
+                  and is cleared once you send the thing — passwords and files are never kept this
+                  way.
                 </>
               ),
             },

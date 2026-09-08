@@ -4,8 +4,18 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   experimental: {
-    // Server Actions receive form posts from the Render domain.
-    serverActions: { bodySizeLimit: "2mb" },
+    /**
+     * Server Actions receive form posts from the Render domain — and, since
+     * attachments went into the database, the files themselves.
+     *
+     * This is the outer ceiling, not the limit people meet: `MAX_UPLOAD_BYTES`
+     * in src/lib/attachments.ts is what the upload actions enforce and what
+     * every form says out loud. This number sits above the highest value
+     * MAX_UPLOAD_MB is allowed to take (20 MB) plus multipart overhead, so a
+     * file that is over the real limit comes back as a sentence naming the
+     * file rather than as a framework error with nothing useful in it.
+     */
+    serverActions: { bodySizeLimit: "24mb" },
   },
 
   /**

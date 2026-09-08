@@ -11,6 +11,9 @@ import { Avatar, Card, DocStatusPill, LastUpdated, PageHeader, SectionTitle } fr
 import { CopyButton } from "@/components/chrome";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { Comments } from "@/components/comments";
+import { Attachments } from "@/components/attachments";
+import { listAttachments } from "@/lib/attachment-access";
+import { MAX_UPLOAD_BYTES } from "@/lib/attachments";
 
 export const metadata: Metadata = { title: "Document" };
 export const dynamic = "force-dynamic";
@@ -42,7 +45,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   const editable = can(viewer, "update", resource);
   const deletable = can(viewer, "delete", resource);
 
-  const [comments, attachedTask] = await Promise.all([
+  const [comments, attachedTask, attachments] = await Promise.all([
     db.comment.findMany({
       where: { parentType: "document", parentId: id, deletedAt: null },
       include: { user: { select: { id: true, name: true, nickname: true, avatarUrl: true } } },
@@ -55,6 +58,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           select: { id: true, title: true, status: true, deletedAt: true },
         })
       : Promise.resolve(null),
+    listAttachments("document", id),
   ]);
 
   const isPortalDoc = document.source === "portal" && document.body !== null;
@@ -215,6 +219,21 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           />
         </div>
       ) : null}
+
+      <div className="hs-no-print">
+        <Card>
+          <Attachments
+            parentType="document"
+            parentId={id}
+            canWrite={editable}
+            attachments={attachments}
+            viewerId={viewer.id}
+            maxBytes={MAX_UPLOAD_BYTES}
+            title="Attached files"
+            hint="Anything the document refers to"
+          />
+        </Card>
+      </div>
 
       <div className="hs-no-print">
         <Card>

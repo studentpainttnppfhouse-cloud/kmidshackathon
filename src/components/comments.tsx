@@ -4,6 +4,7 @@ import { useActionState, useRef, useEffect } from "react";
 import { addComment } from "@/lib/actions/assignments";
 import type { FormState } from "@/lib/actions/auth";
 import { Feedback, SubmitButton } from "@/components/form-bits";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { Avatar } from "@/components/ui";
 
 const initial: FormState = {};
@@ -38,6 +39,7 @@ export function CommentForm({
         placeholder="Add a comment…"
         className="hs-input resize-y"
       />
+      <DraftKeeper formKey={`comment:${parentType}:${parentId}`} />
       <Feedback state={state.error ? state : {}} />
       <SubmitButton className="hs-btn hs-btn-secondary" pendingLabel="Posting…">
         Comment

@@ -15,6 +15,7 @@ import {
   TierPill,
 } from "@/components/ui";
 import { timeAgo } from "@/lib/dates";
+import { assetLinks } from "@/lib/attachment-access";
 
 export const metadata: Metadata = { title: "Department" };
 export const dynamic = "force-dynamic";
@@ -67,6 +68,8 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
       take: 5,
     }),
   ]);
+
+  const assetHrefs = await assetLinks(files);
 
   const done = assignments.filter((a) => a.status === "DONE" || a.status === "APPROVED").length;
   const overdue = assignments.filter(
@@ -214,18 +217,28 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
               <EmptyState title="No assets linked" />
             ) : (
               <ul className="space-y-1.5">
-                {files.map((f) => (
-                  <li key={f.id}>
-                    <a
-                      href={f.externalUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="block truncate text-sm text-ink hover:text-brand-deep"
-                    >
-                      {f.name} ↗
-                    </a>
-                  </li>
-                ))}
+                {files.map((f) => {
+                  const link = assetHrefs.get(f.id);
+                  if (!link) return null;
+
+                  return (
+                    <li key={f.id}>
+                      <a
+                        href={link.href}
+                        // Only a link asset leaves the portal. An uploaded one
+                        // is served from here, so it needs neither the new tab
+                        // nor the noreferrer.
+                        {...(link.external
+                          ? { target: "_blank", rel: "noreferrer noopener" }
+                          : {})}
+                        className="block truncate text-sm text-ink hover:text-brand-deep"
+                      >
+                        {f.name}
+                        {link.external ? " ↗" : ""}
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Card>

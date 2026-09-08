@@ -104,16 +104,62 @@ without a server or a database.
 actions actually call (`requireViewer`, `requireTier`, `assertCan`). See
 [PERMISSIONS.md](PERMISSIONS.md).
 
-## Files: links, not uploads
+## Files: uploads in the database, links over the limit
 
-Render's free tier has an ephemeral filesystem — anything written to disk is
-gone on the next deploy — and MySQL rows are the wrong place for binaries. So
-the file library stores **metadata plus a Drive or Canva link**. The portal is
-the index; Drive holds the bytes.
+The original decision (D2-1) was links only. Render's free tier has an
+ephemeral filesystem — anything written to disk is gone on the next deploy — so
+the file library stored **metadata plus a Drive or Canva link** and nothing
+else.
 
-This keeps the deployment to a single external credential (`DATABASE_URL`) and
-matches how the team already works. If real uploads become necessary, object
-storage (R2 or S3) is the upgrade path; it adds three or four credentials.
+The first half of that reasoning still holds. The conclusion did not: the disk
+was never the only place to put a file. TiDB survives every redeploy the disk
+does not, so bytes now go there, in 256 KB rows in `attachment_chunks`, with
+one `attachments` row carrying the name, the sanitised MIME type, the size and
+a SHA-256.
+
+| | Where the bytes are | When |
+| --- | --- | --- |
+| Upload | `attachment_chunks` in TiDB | Up to `MAX_UPLOAD_MB` (default 10 MB) |
+| Link | Drive, Canva, wherever | Anything larger, and anything already there |
+
+The upload path is chunked rather than one big blob for two reasons: TiDB caps
+the size of a single transaction entry, and a download streams one chunk at a
+time so a 10 MB file never costs 10 MB of heap on a 512 MB instance.
+
+Attachments hang off a parent (`parentType` + `parentId`) and store **no
+permission of their own**. Every read and every write re-derives it from that
+parent through `src/lib/attachment-access.ts`, which calls the same
+`src/lib/policy.ts` everything else calls. A task that moves department takes
+its files with it, and there is no second copy of the rules to keep in step.
+
+Object storage (R2 or S3) is still the upgrade path if the free TiDB tier ever
+runs short; it adds three or four credentials, which is why it is not the
+starting point.
+
+## Joining: one link and one QR code
+
+`Invite` names one email address and burns itself on first use. That is the
+right tool for one person and the wrong one for a room of sixty at the first
+staff meeting, so `InviteLink` is the other half: one code, printed on a poster
+or shown on a projector, that registers whoever scans it.
+
+The safety of that shape rests on four things, all enforced server-side in
+`src/lib/actions/join-links.ts`:
+
+1. the KMIDS email domain, exactly as the login gate enforces it;
+2. `JOIN_LINK_MAX_TIER` — no join link may ever grant an admin account,
+   whoever created it and whatever the stored row says;
+3. uses and expiry, both re-checked at the moment of registration, with the
+   use claimed by a conditional `updateMany` so two phones scanning at once
+   cannot both take the last seat;
+4. `revokedAt`, which kills every printed copy at once.
+
+`users.joinedViaLinkId` records which link an account came through, so a link
+that turns out to have leaked can be traced rather than guessed at.
+
+QR codes are rendered server-side as a single inline SVG `<path>` (see
+`src/lib/qr.ts`). No canvas, no image request, no client bundle, and nothing
+for the Content-Security-Policy to make an exception for.
 
 ## Documents: both, and the author picks
 
