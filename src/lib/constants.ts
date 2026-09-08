@@ -36,6 +36,25 @@ export const BCRYPT_COST = 12;
 export const INVITE_TTL_DAYS = 14;
 export const RESET_TTL_HOURS = 48;
 
+/**
+ * Join links — the organisation-wide invite, the one that goes on a poster.
+ *
+ * `JOIN_LINK_MAX_TIER` is the ceiling on what a self-serve link may grant, and
+ * it is deliberately below the ceiling on a personal invite. A per-email invite
+ * names one address that an admin typed; a join link is a string that will end
+ * up photographed, forwarded and stuck to a wall. Anyone who gets hold of one
+ * and has a school address can use it, so what it hands out has to be a tier
+ * where that is survivable: a member, or at most a department head. Admin
+ * accounts stay on the one-person-at-a-time path.
+ */
+export const JOIN_LINK_MAX_TIER: Tier = "T2_HEAD";
+
+/** Default life of a new join link. Null is offered too, and never expires. */
+export const JOIN_LINK_TTL_DAYS = 30;
+
+/** A link nobody may set above. Keeps a typo from creating an unlimited one. */
+export const JOIN_LINK_MAX_USES = 500;
+
 export const TIER_ORDER: Record<Tier, number> = {
   T0_ADVISOR: 0,
   T1_MEMBER: 1,

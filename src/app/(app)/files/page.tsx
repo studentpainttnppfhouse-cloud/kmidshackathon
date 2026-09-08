@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
-import { safeHref } from "@/lib/url";
-import { Banner, EmptyState, PageHeader } from "@/components/ui";
+import { assetLinks } from "@/lib/attachment-access";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
 import type { Prisma } from "@prisma/client";
 
@@ -45,6 +45,8 @@ export default async function FilesPage({
     ? readable.filter((f) => Array.isArray(f.tags) && (f.tags as string[]).includes(tag))
     : readable;
 
+  const assetHrefs = await assetLinks(visible);
+
   const allTags = [
     ...new Set(readable.flatMap((f) => (Array.isArray(f.tags) ? (f.tags as string[]) : []))),
   ].sort();
@@ -57,22 +59,16 @@ export default async function FilesPage({
     <div className="hs-enter space-y-5">
       <PageHeader
         eyebrow="Files & assets"
-        title="The index, not the drive"
-        subtitle="Every logo, template and deck the team has, with a link to where the bytes actually live."
+        title="Every file the team has"
+        subtitle="Every logo, template and deck the team has — uploaded here, or linked to where the big ones live."
         action={
           canCreate ? (
             <Link href="/files/new" className="hs-btn hs-btn-primary">
-              <span aria-hidden="true">＋</span> Link an asset
+              <span aria-hidden="true">＋</span> Add an asset
             </Link>
           ) : null
         }
       />
-
-      <Banner tone="info">
-        The portal stores links, not files. Keep the actual bytes in Drive or
-        Canva — Render wipes its own disk on every deploy, so anything uploaded
-        here would vanish the next time the portal updates.
-      </Banner>
 
       <form className="flex flex-wrap gap-2">
         <input
@@ -119,45 +115,59 @@ export default async function FilesPage({
       {visible.length === 0 ? (
         <EmptyState
           title="Nothing here yet"
-          hint="Link the first asset, or clear the filters."
+          hint="Add the first asset, or clear the filters."
           action={
             canCreate ? (
               <Link href="/files/new" className="hs-btn hs-btn-primary mt-2">
-                Link an asset
+                Add an asset
               </Link>
             ) : undefined
           }
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((f) => (
-            <a
-              key={f.id}
-              // safeHref again at the point of rendering: an asset row written
-              // before the scheme allowlist existed becomes a dead link rather
-              // than an executable one.
-              href={safeHref(f.externalUrl) ?? "#"}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="hs-card p-4"
-            >
-              <span className="mb-1.5 flex items-center gap-2">
-                <span className="hs-pill bg-tint text-brand-deep">{f.kind}</span>
-                {f.isBrandKit ? (
-                  <span className="hs-pill bg-violet-soft text-violet-strong">Brand</span>
+          {visible.map((f) => {
+            const link = assetHrefs.get(f.id);
+
+            return (
+              <a
+                key={f.id}
+                // A row whose link failed the scheme allowlist, or whose
+                // upload is gone, resolves to nothing at all — a dead anchor
+                // rather than an executable one.
+                href={link?.href ?? "#"}
+                {...(link?.external ? { target: "_blank", rel: "noreferrer noopener" } : {})}
+                className="hs-card p-4"
+              >
+                <span className="mb-1.5 flex items-center gap-2">
+                  <span className="hs-pill bg-tint text-brand-deep">{f.kind}</span>
+                  {link && !link.external ? (
+                    <span className="hs-pill bg-ok-soft text-ok-strong">In the portal</span>
+                  ) : null}
+                  {f.isBrandKit ? (
+                    <span className="hs-pill bg-violet-soft text-violet-strong">Brand</span>
+                  ) : null}
+                </span>
+                <span className="block text-sm font-bold text-ink">
+                  {f.name}
+                  {link?.external ? " ↗" : ""}
+                </span>
+                {f.description ? (
+                  <span className="mt-1 block line-clamp-2 text-xs text-muted">
+                    {f.description}
+                  </span>
                 ) : null}
-              </span>
-              <span className="block text-sm font-bold text-ink">{f.name} ↗</span>
-              {f.description ? (
-                <span className="mt-1 block line-clamp-2 text-xs text-muted">{f.description}</span>
-              ) : null}
-              <span className="mt-2 flex items-center gap-1.5 text-[11px] text-faint">
-                <span className="h-2 w-2 rounded-full" style={{ background: f.department.color }} />
-                {f.department.name} · {f.uploadedBy.nickname || f.uploadedBy.name} ·{" "}
-                {formatDate(f.createdAt)}
-              </span>
-            </a>
-          ))}
+                <span className="mt-2 flex items-center gap-1.5 text-[11px] text-faint">
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: f.department.color }}
+                  />
+                  {f.department.name} · {f.uploadedBy.nickname || f.uploadedBy.name} ·{" "}
+                  {formatDate(f.createdAt)}
+                </span>
+              </a>
+            );
+          })}
         </div>
       )}
 

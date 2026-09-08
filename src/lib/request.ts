@@ -85,3 +85,34 @@ export function looksAutomated(formData: FormData): boolean {
 
   return false;
 }
+
+/**
+ * The public origin of this deployment, as a browser would type it.
+ *
+ * Needed wherever a link has to leave the portal and come back — a QR code on
+ * a poster carries no referrer and no relative path to resolve against, so
+ * "/join/abc" is useless printed on paper.
+ *
+ * `APP_URL` wins when it is set, because a deployment behind a custom domain
+ * knows its own name and the request headers may not. Otherwise the forwarded
+ * host is used: Render puts the name the browser actually asked for in `host`,
+ * and `x-forwarded-proto` says whether that leg was encrypted.
+ */
+export async function appOrigin(): Promise<string> {
+  const configured = process.env.APP_URL?.trim();
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      // A malformed APP_URL falls through to the headers rather than throwing
+      // on a page that only wanted to draw a QR code.
+    }
+  }
+
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto")?.split(",")[0].trim();
+  const scheme = proto === "http" || host.startsWith("localhost") ? "http" : "https";
+
+  return `${scheme}://${host}`;
+}

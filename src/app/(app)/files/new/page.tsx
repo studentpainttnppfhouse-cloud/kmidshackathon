@@ -4,8 +4,9 @@ import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
 import { FileForm } from "@/components/content-forms";
 import { Banner, PageHeader } from "@/components/ui";
+import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachments";
 
-export const metadata: Metadata = { title: "Link an asset" };
+export const metadata: Metadata = { title: "Add an asset" };
 export const dynamic = "force-dynamic";
 
 export default async function NewFilePage() {
@@ -32,7 +33,7 @@ export default async function NewFilePage() {
     <div className="hs-enter space-y-5">
       <PageHeader
         eyebrow="Files & assets"
-        title="Link an asset"
+        title="Add an asset"
         action={
           <Link href="/files" className="hs-btn hs-btn-ghost">
             Cancel
@@ -41,13 +42,16 @@ export default async function NewFilePage() {
       />
 
       <Banner tone="info">
-        The portal stores links, not files. Keep the actual bytes in Drive or Canva — Render wipes
-        its own disk on every deploy, so anything uploaded here would vanish the next time the
-        portal updates.
+        Files up to {formatBytes(MAX_UPLOAD_BYTES)} are stored in the portal database, which
+        survives every redeploy — Render&rsquo;s own disk does not, which is why they do not go
+        there. Anything bigger stays in Drive or Canva and gets linked instead.
       </Banner>
 
       <div className="hs-card p-5 sm:p-6">
-        <FileForm departments={creatable.map((d) => ({ id: d.id, name: d.name }))} />
+        <FileForm
+          departments={creatable.map((d) => ({ id: d.id, name: d.name }))}
+          maxBytes={MAX_UPLOAD_BYTES}
+        />
       </div>
     </div>
   );

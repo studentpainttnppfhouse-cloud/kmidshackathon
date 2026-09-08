@@ -173,11 +173,51 @@ storing it in the clear knowingly.
 
 ## Uploads
 
-There are none, and that is the design. The portal stores links; Drive and
-Canva hold the bytes. Render wipes its disk on every deploy, so an upload would
-vanish at the next release anyway. The security consequence is that there is no
-multipart handler, no temp directory, no MIME sniffing and no path traversal to
-get wrong.
+Files are stored in the database, never on disk. There is no uploads directory,
+no temp file and no path to traverse — the bytes go from the Server Action into
+`attachment_chunks` and come back out through one route handler.
+
+Four rules keep a file somebody uploaded from becoming a page on this origin,
+which is the origin holding everybody's session cookie:
+
+1. **The extension decides the type, not the browser.** `File.type` is a
+   string the client chose. An unrecognised extension is stored as a byte
+   stream even when the browser insists it is a PNG, which closes the "upload
+   markup, declare it an image" path (`safeMimeType`, `tests/attachments.test.ts`).
+2. **Only images and PDFs may render inline.** Everything else — HTML, SVG,
+   anything unknown — comes back as `application/octet-stream` with
+   `Content-Disposition: attachment`, whatever it claimed to be. SVG is
+   excluded deliberately: it is an image that carries `<script>`.
+3. **`nosniff`, plus a policy of its own.** Attachment responses carry
+   `default-src 'none'; sandbox`, set in `src/middleware.ts` because the
+   middleware's header is the one that survives — a policy written only in the
+   route would be replaced by the ordinary page policy.
+4. **Filenames are stripped, not escaped.** Path separators, control
+   characters and quotes are removed before a name reaches a
+   `Content-Disposition` header, so a filename cannot split a response header
+   or imply a directory.
+
+Authorisation is re-derived from the attachment's parent on every request via
+`src/lib/attachment-access.ts`; an attachment id is not a capability. A request
+with no session, for a file that does not exist, or for one the viewer may not
+read all answer the same 404.
+
+Uploads are capped at `MAX_UPLOAD_MB` (default 10 MB, hard-capped at 20),
+checked in the browser, again against the bytes actually received, and again by
+the Server Action body limit. Over the cap, the attachment is recorded as a
+link instead.
+
+## Join links
+
+A join link is a bearer token that ends up on a poster, so it is bounded rather
+than trusted: the KMIDS email domain still applies, no link may grant above
+`JOIN_LINK_MAX_TIER` (a link can never mint an admin), uses and expiry are
+re-checked at registration with the use claimed by a conditional `updateMany`,
+and revoking one kills every printed copy at once.
+
+An address that already has a password is refused outright — a join link
+registers new accounts and can never take over an existing one — and
+`users.joinedViaLinkId` records which link each account came through.
 
 ## Secrets
 

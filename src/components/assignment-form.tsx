@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { createAssignment, updateAssignment } from "@/lib/actions/assignments";
 import type { FormState } from "@/lib/actions/auth";
 import { Feedback, SubmitButton } from "@/components/form-bits";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { Avatar } from "@/components/ui";
 import { PRIORITY_LABEL, STATUS_LABEL, STATUS_ORDER } from "@/lib/constants";
 import { toDateInput } from "@/lib/dates";
@@ -398,6 +399,7 @@ export function AssignmentForm({
       </aside>
 
       <div className="hs-composer-feedback">
+        <DraftKeeper formKey={assignment ? `assignment:${assignment.id}` : "assignment:new"} />
         <Feedback state={state} />
       </div>
       {/* --- Commit ------------------------------------------------------ */}

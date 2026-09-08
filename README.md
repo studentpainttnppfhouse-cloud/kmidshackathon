@@ -136,13 +136,30 @@ OWNER_EMAIL=you@kmids.ac.th npm run db:seed   # invite only
 
 ### 4. Add the team
 
-**Admin → Add somebody to the portal.** A name and a `@kmids.ac.th` address is
-all it takes; the team, role and tier can be set later from the user list, once
-the chart settles. The form hands back the invite link, so **copy it and send it
-on LINE**. The portal
-deliberately sends no email — that would mean adding SMTP credentials to the
-deployment, which the build plan rules out. Same for password resets: an owner
-generates a one-time link from Admin and hands it over.
+Two ways in, and which one you want depends on how many people are in front of
+you.
+
+**One person: Admin → Add somebody to the portal.** A name and a
+`@kmids.ac.th` address is all it takes; the team, role and tier can be set
+later from the user list, once the chart settles. The form hands back the
+invite link, so **copy it and send it on LINE**.
+
+**A whole room: Admin → Join links & QR codes.** One link and one QR code the
+team scans, the way Teams and Classroom do it. Put the code on the projector at
+the first staff meeting and the room registers itself: scan, type a name, a
+school email and a password, and they are in and signed in. Each link says what
+it grants, counts its uses, and switches off in one click — and there is a
+printable poster page for the ones that go on a wall.
+
+A join link is a key, so it is a bounded one. Only `@kmids.ac.th` addresses can
+use it, it can never grant an admin account whoever made it, it stops at the
+number of uses you set, and revoking it kills every printed copy at once. Every
+account records which link it came through.
+
+The portal deliberately sends no email — that would mean adding SMTP
+credentials to the deployment, which the build plan rules out. Same for
+password resets: an owner generates a one-time link from Admin and hands it
+over.
 
 ---
 
@@ -159,7 +176,7 @@ npm run dev
 | --- | --- |
 | `npm run dev` | Development server on :3000 |
 | `npm run build` / `npm start` | Production build and serve |
-| `npm test` | Unit suite — permissions, link safety, exports, forms, crypto |
+| `npm test` | Unit suite — permissions, link safety, uploads, QR, join links, exports, forms, crypto |
 | `npm run test:e2e` | Browser suite — needs a running server, see `docs/TESTING.md` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run audit` | Fails on a high/critical advisory in a runtime dependency |
@@ -175,13 +192,16 @@ npm run dev
 | Module | State |
 | --- | --- |
 | Invite-only auth, long-lived sessions, admin-issued resets | Done |
+| Join links & QR codes — one code a whole room scans, with a printable poster | Done |
 | Dashboard — per tier, with the countdown to 20 March 2027 | Done |
 | Assignments — board, list, calendar, my tasks, comments, approvals | Done |
 | Department workspaces ×6 plus General | Done |
 | People directory and org chart | Done |
 | Documents — written in the portal *or* linked from Drive | Done |
 | Document export — `.docx`, `.pdf`, Markdown, no dependencies | Done |
-| Files & assets — link index, plus the Brand Kit | Done |
+| Files & assets — upload into the portal or link out, plus the Brand Kit | Done |
+| Attachments on tasks, documents and announcements — files, not links | Done |
+| Draft auto-save — what you typed survives a closed tab | Done |
 | Brand Kit — editable palette, generated colour ramps, fonts, PDF export | Done |
 | Forms — built and answered in the portal, plus external Google Forms | Done |
 | Announcements with read receipts | Done |

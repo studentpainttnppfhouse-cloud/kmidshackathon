@@ -6,9 +6,12 @@ import { requireViewer, can } from "@/lib/authorize";
 import { deleteAssignment } from "@/lib/actions/assignments";
 import { formatDateLong, isOverdue, relativeDue, timeAgo } from "@/lib/dates";
 import { AssignmentForm } from "@/components/assignment-form";
+import { Attachments } from "@/components/attachments";
 import { CommentForm } from "@/components/comments";
 import { StatusButtons } from "@/components/status-buttons";
 import { Avatar, Banner, Card, PriorityPill, SectionTitle, StatusPill } from "@/components/ui";
+import { listAttachments } from "@/lib/attachment-access";
+import { MAX_UPLOAD_BYTES } from "@/lib/attachments";
 
 export const metadata: Metadata = { title: "Task" };
 export const dynamic = "force-dynamic";
@@ -42,7 +45,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   const mayDelete = can(viewer, "delete", resource);
   const mayAssign = can(viewer, "assign", resource);
 
-  const [comments, departments, people] = await Promise.all([
+  const [comments, departments, people, attachments] = await Promise.all([
     db.comment.findMany({
       where: { parentType: "assignment", parentId: a.id, deletedAt: null },
       include: { user: { select: { name: true, nickname: true, avatarUrl: true } } },
@@ -61,6 +64,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
       },
       orderBy: { name: "asc" },
     }),
+    listAttachments("assignment", a.id),
   ]);
 
   const overdue = isOverdue(a.dueDate, a.status);
@@ -162,6 +166,23 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
             <StatusButtons id={a.id} current={a.status} canApprove={mayApprove} />
           </div>
         ) : null}
+      </Card>
+
+      {/* Files live between the brief and the conversation, because that is
+          what they are: the thing the task is about. Whoever set the task and
+          whoever it is set for can both add to it — `mayEdit` is exactly that
+          pair, plus the head and the admins above them. */}
+      <Card>
+        <Attachments
+          parentType="assignment"
+          parentId={a.id}
+          canWrite={mayEdit}
+          attachments={attachments}
+          viewerId={viewer.id}
+          maxBytes={MAX_UPLOAD_BYTES}
+          title="Files on this task"
+          hint="The brief, and the work sent back"
+        />
       </Card>
 
       <Card>

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
 import { deleteBrandToken } from "@/lib/actions/brand";
-import { safeHref } from "@/lib/url";
+import { assetLinks } from "@/lib/attachment-access";
 import { ColorForm, FontForm, RampForm } from "@/components/brand-forms";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { CopyButton } from "@/components/chrome";
@@ -62,6 +62,8 @@ export default async function BrandPage() {
     }),
     db.brandToken.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] }),
   ]);
+
+  const assetHrefs = await assetLinks(assets);
 
   const canEdit = can(viewer, "manage_departments", { kind: "system" });
 
@@ -277,24 +279,30 @@ export default async function BrandPage() {
         </SectionTitle>
         {assets.length === 0 ? (
           <EmptyState
-            title="No brand assets linked yet"
+            title="No brand assets yet"
             hint='Add them from Files & Assets and tick "Show this in the Brand Kit".'
           />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {assets.map((asset) => (
-              <a
-                key={asset.id}
-                href={safeHref(asset.externalUrl) ?? "#"}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="rounded-xl border border-line p-3 transition hover:border-brand"
-              >
-                <span className="hs-pill bg-tint text-brand-deep">{asset.kind}</span>
-                <span className="mt-1.5 block text-sm font-bold text-ink">{asset.name} ↗</span>
-                <span className="block text-[11px] text-faint">{asset.department.name}</span>
-              </a>
-            ))}
+            {assets.map((asset) => {
+              const link = assetHrefs.get(asset.id);
+
+              return (
+                <a
+                  key={asset.id}
+                  href={link?.href ?? "#"}
+                  {...(link?.external ? { target: "_blank", rel: "noreferrer noopener" } : {})}
+                  className="rounded-xl border border-line p-3 transition hover:border-brand"
+                >
+                  <span className="hs-pill bg-tint text-brand-deep">{asset.kind}</span>
+                  <span className="mt-1.5 block text-sm font-bold text-ink">
+                    {asset.name}
+                    {link?.external ? " ↗" : ""}
+                  </span>
+                  <span className="block text-[11px] text-faint">{asset.department.name}</span>
+                </a>
+              );
+            })}
           </div>
         )}
       </Card>

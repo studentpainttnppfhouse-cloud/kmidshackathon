@@ -34,6 +34,7 @@ export async function GET() {
     eventItems,
     checkins,
     incidents,
+    attachments,
   ] = await Promise.all([
     db.user.findMany({
       select: {
@@ -62,6 +63,27 @@ export async function GET() {
     db.eventItem.findMany(),
     db.checkin.findMany(),
     db.incident.findMany(),
+    // Metadata only. The bytes live in `attachment_chunks` and would turn a
+    // readable JSON file into a hundred megabytes of base64 — a database dump
+    // is the right tool for those, and the checksum here is what proves a
+    // restored file is the one this export described.
+    db.attachment.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        parentType: true,
+        parentId: true,
+        name: true,
+        mimeType: true,
+        size: true,
+        checksum: true,
+        storage: true,
+        externalUrl: true,
+        departmentId: true,
+        uploadedById: true,
+        createdAt: true,
+      },
+    }),
   ]);
 
   await audit(viewer!.id, "data.exported");
@@ -71,13 +93,15 @@ export async function GET() {
       portal: "Hackathon Studio — KMIDS Hackathon 2027",
       exportedAt: new Date().toISOString(),
       exportedBy: viewer!.email,
-      note: "Password hashes, session tokens, invite codes and reset codes are deliberately excluded. External file links point at Google Drive and Canva; export those separately.",
+      note: "Password hashes, session tokens, invite codes, join-link codes and reset codes are deliberately excluded. Attachments are listed with their name, size and SHA-256 but not their bytes — take a database dump for those. External file links point at Google Drive and Canva; export those separately.",
       counts: {
         users: users.length,
         departments: departments.length,
         assignments: assignments.length,
         documents: documents.length,
         files: files.length,
+        attachments: attachments.length,
+        attachmentBytes: attachments.reduce((sum, file) => sum + file.size, 0),
         forms: forms.length,
         announcements: announcements.length,
       },
@@ -93,6 +117,7 @@ export async function GET() {
     eventItems,
     checkins,
     incidents,
+    attachments,
   };
 
   const stamp = new Date().toISOString().slice(0, 10);

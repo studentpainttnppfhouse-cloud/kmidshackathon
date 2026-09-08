@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -8,6 +9,15 @@ import { audit } from "@/lib/audit";
 import { assertCan, requireViewer, can, type Viewer } from "@/lib/authorize";
 import { optionalUrlSchema, urlSchema } from "@/lib/url";
 import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
+import {
+  CHUNK_BYTES,
+  MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_LABEL,
+  formatBytes,
+  kindOf,
+  safeFileName,
+  safeMimeType,
+} from "@/lib/attachments";
 import type { FormState } from "@/lib/actions/auth";
 import type { DocStatus } from "@prisma/client";
 
@@ -310,13 +320,24 @@ export async function deleteDocument(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Files & assets — link-only (decision D2-1). The portal is the index; Drive
-// and Canva hold the bytes. Render's filesystem is ephemeral and TiDB is not
-// a blob store, so this is the only shape that survives a redeploy.
+// Files & assets — an index that now also holds the bytes.
 //
-// It is also the reason there is no upload endpoint to secure: no multipart
-// handler, no temp directory, no MIME sniffing, no path traversal. The safest
-// upload is the one the application cannot perform.
+// Decision D2-1 made this link-only, on the grounds that Render wipes its disk
+// on every deploy and TiDB is not a blob store. The first half of that was
+// right and the second half was the wrong conclusion drawn from it: the disk
+// was never the only place to put a file. Bytes go in `attachment_chunks`
+// (see src/lib/attachments.ts), which survives every redeploy the disk does
+// not, and an asset is now either an upload or a link:
+//
+//   kind = "link"   externalUrl points at Drive or Canva. Unchanged, and still
+//                   the right answer for a 400 MB video.
+//   anything else   the bytes are an Attachment on this asset, and
+//                   externalUrl is null.
+//
+// The upload path is narrow on purpose: no temp directory, no filesystem, no
+// path to traverse, and a stored MIME type that is derived rather than
+// believed. What the browser claims a file is has no bearing on how it is
+// served back.
 // ---------------------------------------------------------------------------
 
 const FILE_KINDS = ["link", "image", "pdf", "video", "design", "font", "logo", "doc"] as const;
@@ -330,6 +351,9 @@ const fileSchema = z.object({
   tags: z.string().trim().max(300).optional().or(z.literal("")),
   isBrandKit: z.coerce.boolean().optional(),
 });
+
+/** The same fields, minus the link, for an asset that carries its own bytes. */
+const uploadedFileSchema = fileSchema.omit({ externalUrl: true, kind: true });
 
 export async function createFile(_prev: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireViewer();
@@ -373,6 +397,107 @@ export async function createFile(_prev: FormState, formData: FormData): Promise<
   redirect("/files");
 }
 
+/**
+ * Files an asset by uploading it, rather than by pointing at it.
+ *
+ * The whole flow is one submission: the asset row and its bytes are written
+ * together, so there is no window in which the index lists an asset that has
+ * nothing behind it. If the bytes fail, the row does not exist, and the person
+ * is told which file was the problem rather than finding an empty card later.
+ *
+ * Over the limit, the form falls back to the link path above. That is not a
+ * consolation prize — for a 400 MB export video it is the correct answer, and
+ * the portal keeps the name, the team and the tags either way.
+ */
+export async function uploadFileAsset(_prev: FormState, formData: FormData): Promise<FormState> {
+  const viewer = await requireViewer();
+  const throttled = writeLimit(viewer);
+  if (throttled) return throttled;
+
+  const parsed = uploadedFileSchema.safeParse({
+    name: formData.get("name") ?? "",
+    description: formData.get("description") ?? "",
+    departmentId: formData.get("departmentId") ?? "",
+    tags: formData.get("tags") ?? "",
+    isBrandKit: formData.get("isBrandKit") === "on",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const d = parsed.data;
+
+  const upload = formData.get("file");
+  if (!(upload instanceof File) || upload.size === 0) {
+    return { error: "Pick a file to upload, or paste a link instead." };
+  }
+  if (upload.size > MAX_UPLOAD_BYTES) {
+    return {
+      error: `That file is ${formatBytes(upload.size)}, over the ${MAX_UPLOAD_LABEL} limit. Put it in Drive and paste the link instead.`,
+    };
+  }
+
+  if (!(await assertDepartmentExists(d.departmentId))) {
+    return { error: "That department no longer exists." };
+  }
+
+  assertCan(viewer, "create", { kind: "file", departmentId: d.departmentId, ownerId: viewer.id });
+
+  const fileName = safeFileName(upload.name);
+  const mimeType = safeMimeType(upload.type, fileName);
+  const bytes = Buffer.from(await upload.arrayBuffer());
+
+  // Re-measured from what actually arrived, not from the size the browser
+  // reported before sending it.
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_UPLOAD_BYTES) {
+    return { error: "That file did not arrive in one piece. Try it again." };
+  }
+
+  const asset = await db.fileAsset.create({
+    data: {
+      name: d.name,
+      description: d.description || null,
+      externalUrl: null,
+      departmentId: d.departmentId,
+      uploadedById: viewer.id,
+      kind: kindOf(mimeType),
+      tags: parseTags(d.tags),
+      isBrandKit: Boolean(d.isBrandKit),
+    },
+  });
+
+  const attachment = await db.attachment.create({
+    data: {
+      parentType: "file",
+      parentId: asset.id,
+      name: fileName,
+      mimeType,
+      size: bytes.byteLength,
+      checksum: createHash("sha256").update(bytes).digest("hex"),
+      storage: "db",
+      departmentId: d.departmentId,
+      uploadedById: viewer.id,
+    },
+  });
+
+  for (let offset = 0, idx = 0; offset < bytes.byteLength; offset += CHUNK_BYTES, idx += 1) {
+    await db.attachmentChunk.create({
+      data: {
+        attachmentId: attachment.id,
+        idx,
+        bytes: bytes.subarray(offset, Math.min(offset + CHUNK_BYTES, bytes.byteLength)),
+      },
+    });
+  }
+
+  await audit(viewer.id, "file.uploaded", {
+    type: "file",
+    id: asset.id,
+    detail: `${d.name} (${formatBytes(bytes.byteLength)})`,
+  });
+
+  revalidatePath("/files");
+  revalidatePath("/brand");
+  redirect("/files");
+}
+
 export async function deleteFile(id: string): Promise<void> {
   const viewer = await requireViewer();
   const f = await db.fileAsset.findUnique({
@@ -388,6 +513,21 @@ export async function deleteFile(id: string): Promise<void> {
   });
 
   await db.fileAsset.update({ where: { id }, data: { deletedAt: new Date() } });
+
+  // The row is soft-deleted like everything else, so the recycle bin can
+  // restore the card. The bytes are not: an uploaded asset is stored in the
+  // database, and keeping deleted files around is a bill nobody agreed to.
+  // A restored upload comes back as a card that says what it was.
+  const uploads = await db.attachment.findMany({
+    where: { parentType: "file", parentId: id, deletedAt: null },
+    select: { id: true },
+  });
+  if (uploads.length > 0) {
+    const ids = uploads.map((upload) => upload.id);
+    await db.attachment.updateMany({ where: { id: { in: ids } }, data: { deletedAt: new Date() } });
+    await db.attachmentChunk.deleteMany({ where: { attachmentId: { in: ids } } });
+  }
+
   await audit(viewer.id, "file.deleted", { type: "file", id });
   revalidatePath("/files");
   revalidatePath("/brand");

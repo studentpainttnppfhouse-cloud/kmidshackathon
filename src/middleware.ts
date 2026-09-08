@@ -27,6 +27,24 @@ import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/cookies";
 
 const PUBLIC_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml)$/i;
 
+/**
+ * Stored attachments are bytes somebody uploaded, served from the origin that
+ * holds everybody's session cookie.
+ *
+ * The route already refuses to serve anything outside a small allowlist as
+ * itself — everything else comes back as `application/octet-stream` with a
+ * download disposition — but the policy below is the belt to that pair of
+ * braces: nothing loads, nothing runs, and the sandbox denies the response an
+ * origin of its own even if a browser one day decides to render it anyway.
+ *
+ * It lives here rather than only in the route because the middleware's header
+ * is the one that survives: `NextResponse.next()` merges over whatever the
+ * handler set, so a policy written only in the route would be quietly replaced
+ * by the ordinary page policy.
+ */
+const ATTACHMENT_PATH = /^\/api\/attachments\//;
+const ATTACHMENT_CSP = "default-src 'none'; sandbox; frame-ancestors 'none'";
+
 function buildCsp(nonce: string, isProduction: boolean): string {
   const scriptSrc = isProduction
     ? // `strict-dynamic` means the allowlist stops mattering once the nonced
@@ -87,7 +105,8 @@ export function middleware(request: NextRequest): NextResponse {
 
   // --- 2. CSP nonce -------------------------------------------------------
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const csp = buildCsp(nonce, isProduction);
+  const isAttachment = ATTACHMENT_PATH.test(request.nextUrl.pathname);
+  const csp = isAttachment ? ATTACHMENT_CSP : buildCsp(nonce, isProduction);
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

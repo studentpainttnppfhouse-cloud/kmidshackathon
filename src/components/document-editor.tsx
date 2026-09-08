@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { createDocument, updateDocument } from "@/lib/actions/content";
 import { Feedback, SubmitButton } from "@/components/form-bits";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { renderMarkdown, wordCount } from "@/lib/markdown";
 import { DOC_STATUS_LABEL } from "@/lib/constants";
 import type { FormState } from "@/lib/actions/auth";
@@ -61,6 +62,9 @@ export function DocumentEditor({
     <form action={action} className="space-y-5">
       {document ? <input type="hidden" name="id" value={document.id} /> : null}
       <input type="hidden" name="source" value={source} />
+      {/* Keyed per document, so editing two of them in two tabs does not have
+          one overwrite the other's draft. */}
+      <DraftKeeper formKey={document ? `document:${document.id}` : "document:new"} />
 
       <div className="hs-card space-y-4 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
