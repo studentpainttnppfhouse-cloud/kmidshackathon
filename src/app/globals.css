@@ -52,6 +52,13 @@
   --color-tint: var(--hs-tint);
   --color-tint-strong: var(--hs-tint-strong);
 
+  /* Zine roles, so a band or a mint stroke is `bg-band-b` / `text-mint` in
+     markup rather than a hex somebody has to keep in sync by hand. */
+  --color-band-a: var(--hs-band-a);
+  --color-band-b: var(--hs-band-b);
+  --color-mint: var(--hs-mint);
+  --color-marker: var(--hs-marker);
+
   /* Status tones. Each is a triple — a `soft` fill, a `strong` foreground that
      clears 4.5:1 on that fill *and* on a bare card, and an `edge` for banners.
      Tailwind's own `bg-emerald-50 text-emerald-700` pairs cannot do this: they
@@ -92,11 +99,26 @@
   --color-teal: var(--hs-teal-strong);
   --color-violet: var(--hs-violet-strong);
 
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Two families, one contrast axis. Poppins is geometric and heavy and does
+     all the work — display, UI, labels, body. Instrument Serif appears only in
+     italic, only ever set at the same size as the sans beside it, and only as
+     the modifier word inside a heading. That mid-headline switch is the type
+     system: it is not decoration on one hero, it is how every header is built. */
+  --font-sans: Poppins, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-em: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --radius-card: 16px;
   --radius-control: 10px;
+  /* Shape language. `arch` is the tombstone top the content cards are cut to;
+     `pill` is every button and every toggle, with no exceptions — a rounded
+     rectangle beside a pill is what makes a set of controls look unfinished. */
+  --radius-arch: 999px 999px 18px 18px;
+  --radius-pill: 999px;
+
+  /* The scallop. One variable so the bumps stay the same size everywhere and
+     the whole edge language can be retuned from a single line. */
+  --scallop-size: 34px;
 }
 
 /* --- Light (the default, and what the brand was designed in) --------------
@@ -131,6 +153,24 @@
 
   --hs-tint: #fdf2f8;
   --hs-tint-strong: #fce7f3;
+
+  /* --- Zine layer -------------------------------------------------------
+     `band-a` and `band-b` are the two grounds a page alternates between, and
+     they are what the scalloped edge is cut out of: a scallop is always the
+     colour of the band it belongs to, biting into the band underneath. Naming
+     them separately from `surface` matters, because a card sitting on band-b
+     still needs `surface` to be white.
+
+     `mint` is the only new name here and it is the brief's own #2DD4BF, kept
+     out of the semantic roles on purpose — it appears in illustration strokes
+     and nowhere else, which is the only way "sparingly" survives contact with
+     a component library. */
+  --hs-band-a: #ffffff;
+  --hs-band-b: #fdf2f8;
+  --hs-mint: #2dd4bf;
+  /* Marker ink for the stickers. Deep pink rather than the primary, because a
+     3px #ec4899 outline on white is a 3.5:1 shape and reads as a smudge. */
+  --hs-marker: #be185d;
 
   --hs-neutral-soft: #f1f5f9;
   --hs-neutral-strong: #475569;
@@ -198,6 +238,16 @@
   --hs-tint: #3a2b43;
   --hs-tint-strong: #4a3454;
 
+  /* The zine survives here rather than being switched off. The bands stop
+     being white/blush and become the page ground and the raised plum above it,
+     so the scalloped edge still reads as one band biting into another. Mint
+     and the marker ink both lift, for the same reason the pinks do: #2dd4bf
+     holds up on near-black, #be185d does not. */
+  --hs-band-a: #17121a;
+  --hs-band-b: #241d29;
+  --hs-mint: #5eead4;
+  --hs-marker: #f9a8d4;
+
   --hs-neutral-soft: #34333d;
   --hs-neutral-strong: #d2d2dc;
   --hs-neutral-edge: #4a4954;
@@ -257,8 +307,15 @@ body[data-cookie-notice="1"] {
   }
 }
 
-* {
-  border-color: var(--hs-line);
+/* The default hairline colour for anything that declares a border width but no
+   colour. It lives in `@layer base` deliberately: unlayered, this `*` rule beat
+   every component and utility in the file — Tailwind's layers sort below
+   unlayered CSS — so a card that asked for a 2px brand outline silently got a
+   pale grey one instead. Same rule, correct altitude. */
+@layer base {
+  * {
+    border-color: var(--hs-line);
+  }
 }
 
 /* Focus rings are non-negotiable: half of all use is on a phone, and the
@@ -303,22 +360,22 @@ body[data-cookie-notice="1"] {
 }
 
 @layer components {
+  /* No fill beyond the surface, and no shadow. A soft grey shadow under a
+     card is the single thing that made this read as a stock app rather than
+     something printed, so the border is now 2px and carries the whole edge. */
   .hs-card {
     background: var(--hs-surface);
-    border: 1px solid var(--hs-line);
+    border: 2px solid var(--hs-line);
     border-radius: var(--radius-card);
-    box-shadow: var(--hs-shadow);
-    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    transition: border-color 0.18s ease, background-color 0.18s ease;
   }
 
-  /* Anything clickable that is a card lifts very slightly. The movement is
-     2px: enough to read as "this responds", small enough that a page of
-     cards does not feel like it is wobbling. */
+  /* A clickable card answers by inking its outline, not by floating. The old
+     2px lift plus drop shadow meant a page of cards wobbled under the cursor
+     and every one of them looked like it was hovering above the paper. */
   a.hs-card:hover,
   button.hs-card:hover {
     border-color: var(--hs-brand);
-    box-shadow: var(--hs-shadow-lift);
-    transform: translateY(-2px);
   }
 
   .hs-input {
@@ -358,7 +415,7 @@ body[data-cookie-notice="1"] {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: var(--radius-control);
+    border-radius: var(--radius-pill);
     padding: 0.625rem 1rem;
     font-size: 0.9375rem;
     font-weight: 600;
@@ -386,17 +443,19 @@ body[data-cookie-notice="1"] {
   }
   .hs-btn-primary:hover:not(:disabled) {
     background: var(--hs-brand-deep);
-    box-shadow: var(--hs-shadow-lift);
   }
 
+  /* White with a pink outline. The outline is 2px and brand-coloured rather
+     than the muted `edge`, because beside a solid pink pill a grey-edged
+     button reads as disabled. */
   .hs-btn-secondary {
     background: var(--hs-surface);
     color: var(--hs-brand-deep);
-    border: 1px solid var(--hs-edge);
+    border: 2px solid var(--hs-brand);
   }
   .hs-btn-secondary:hover:not(:disabled) {
-    background: var(--hs-hover);
-    border-color: var(--hs-brand);
+    background: var(--hs-tint);
+    border-color: var(--hs-brand-deep);
   }
 
   .hs-btn-ghost {
@@ -411,18 +470,22 @@ body[data-cookie-notice="1"] {
   .hs-btn-danger {
     background: var(--hs-surface);
     color: var(--hs-danger-strong);
-    border: 1px solid var(--hs-danger-edge);
+    border: 2px solid var(--hs-danger-edge);
   }
   .hs-btn-danger:hover:not(:disabled) {
     background: var(--hs-danger-soft);
   }
 
+  /* Sentence case, no tracking. Uppercase-and-tracked was doing two jobs at
+     once — labelling the field and decorating the form — and it did the second
+     one at the cost of the first. `muted` at 0.8125rem clears AA on both
+     bands. */
   .hs-label {
     display: block;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: 0;
+    text-transform: none;
     color: var(--hs-muted);
     margin-bottom: 0.375rem;
   }
@@ -438,24 +501,41 @@ body[data-cookie-notice="1"] {
     white-space: nowrap;
   }
 
+  /* Page and section headings. Bigger and tighter than they were, and set at
+     a fixed rem scale rather than a clamp: this is product chrome that sits
+     next to a sidebar, and a heading that shrinks with the viewport inside a
+     fixed column looks like a bug. The zine surfaces use `.hs-display` below,
+     which is where fluid sizing actually belongs. */
   .hs-h1 {
-    font-size: 1.75rem;
+    font-size: 2rem;
     font-weight: 800;
-    letter-spacing: -0.02em;
-    color: var(--hs-brand-deep);
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    color: var(--hs-ink);
+    text-wrap: balance;
   }
   .hs-h2 {
-    font-size: 1.0625rem;
+    font-size: 1.1875rem;
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
     color: var(--hs-ink);
+    text-wrap: balance;
   }
+
+  /* What used to be the tracked-out all-caps kicker. Same slot in the layout,
+     opposite voice: sentence case, no tracking, set in the italic serif so it
+     reads as an aside written above the headline rather than a system label
+     stamped on top of it. */
   .hs-eyebrow {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--hs-faint);
+    font-family: var(--font-em);
+    font-style: italic;
+    font-size: 1.0625rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    line-height: 1.2;
+    color: var(--hs-brand-deep);
   }
 }
 
@@ -1195,12 +1275,23 @@ body[data-cookie-notice="1"] {
 .hs-prose a:hover {
   color: var(--hs-brand);
 }
+/* A pulled quote, set in the serif rather than announced by a coloured stripe
+   down its left side. The stripe was decoration standing in for hierarchy; the
+   change of voice is the hierarchy. */
 .hs-prose blockquote {
   margin: 0 0 1em;
-  padding: 0.2em 0 0.2em 1em;
-  border-left: 3px solid var(--hs-brand);
-  color: var(--hs-muted);
+  padding: 0.9em 1.1em;
+  border: 2px solid var(--hs-line);
+  border-radius: var(--radius-card);
+  background: var(--hs-tint);
+  color: var(--hs-ink);
+  font-family: var(--font-em);
   font-style: italic;
+  font-size: 1.15em;
+  line-height: 1.45;
+}
+.hs-prose blockquote p:last-child {
+  margin-bottom: 0;
 }
 .hs-prose code {
   font-family: var(--font-mono);
@@ -1234,14 +1325,383 @@ body[data-cookie-notice="1"] {
   margin: 0 0 1em;
 }
 
+/* ===========================================================================
+   THE ZINE LAYER
+
+   Everything below is the shape language: bands, scalloped and arched edges,
+   the display type system, the tombstone cards and the stickers.
+
+   It is deliberately additive. None of it changes a colour — the seven brand
+   hexes are exactly what they were — and none of it is applied globally. The
+   dense operational surfaces (assignments, documents, admin, audit) keep the
+   calm system above and inherit only the new type, the pill buttons and the
+   flat outlined cards. The bands and scallops belong to the surfaces people
+   arrive on: sign-in, welcome, join, invite, event day, help.
+   =========================================================================== */
+
+:root {
+  --sticker-ink: var(--hs-marker);
+  --sticker-fill: var(--hs-brand);
+  --sticker-alt: var(--hs-mint);
+  --sticker-paper: var(--hs-surface);
+  --sticker-wash: var(--hs-tint-strong);
+}
+
+/* Everything below lives in `@layer components` on purpose. Unlayered CSS
+   beats Tailwind's utility layer, so as plain rules these classes silently
+   won every argument — `h-14` on a sticker did nothing, `border-dashed` on a
+   card did nothing. In the components layer a utility can still adjust a
+   shape at the call site, which is the whole point of having them. */
+@layer components {
+  /* --- Bands ----------------------------------------------------------------
+     A page alternates between two grounds instead of running white on white.
+     `--band` is what the scalloped divider reads to know which colour is biting
+     into which, so a band and its edge can never drift apart. */
+
+  .hs-band {
+    --band: var(--hs-band-a);
+    position: relative;
+    background: var(--band);
+  }
+  .hs-band-a {
+    --band: var(--hs-band-a);
+  }
+  .hs-band-b {
+    --band: var(--hs-band-b);
+  }
+  .hs-band-pink {
+    --band: var(--hs-brand-deep);
+    color: var(--hs-on-brand);
+  }
+
+  /* Rhythm is varied on purpose: the first band on a page opens tighter than the
+     ones below it, so a page does not read as a stack of equal slabs. */
+  .hs-band-pad {
+    padding-block: clamp(2.25rem, 6vw, 4rem);
+  }
+  .hs-band-pad-lg {
+    padding-block: clamp(3rem, 9vw, 6rem);
+  }
+
+  /* --- The scalloped edge ---------------------------------------------------
+     The signature move. A strip half a scallop tall, filled with the colour of
+     the band *below*, with a repeated row of half-discs in the colour of the
+     band *above* painted over it. Two flat fills and one repeating mask: it is
+     fully fluid, so it survives 375px by getting narrower rather than by
+     flattening, and it needs no SVG and no JS.
+
+     If `mask` is ever unavailable the strip degrades to a solid band of the
+     upper colour — still a legible divider, never a broken one. */
+
+  .hs-scallop {
+    --scallop-from: var(--hs-band-a);
+    --scallop-to: var(--hs-band-b);
+    position: relative;
+    height: calc(var(--scallop-size) / 2);
+    background: var(--scallop-to);
+    overflow: hidden;
+  }
+
+  .hs-scallop::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--scallop-from);
+    /* Radius is exactly half the tile width, so neighbouring discs meet rather
+       than leaving a nick of the lower colour between them. */
+    -webkit-mask-image: radial-gradient(
+      circle calc(var(--scallop-size) / 2) at 50% 0%,
+      #000 99.5%,
+      transparent 100%
+    );
+    mask-image: radial-gradient(
+      circle calc(var(--scallop-size) / 2) at 50% 0%,
+      #000 99.5%,
+      transparent 100%
+    );
+    -webkit-mask-size: var(--scallop-size) 100%;
+    mask-size: var(--scallop-size) 100%;
+    -webkit-mask-repeat: repeat-x;
+    mask-repeat: repeat-x;
+  }
+
+  /* Direction is a modifier, not a second component: `up` hangs the discs from
+     the lower band into the upper one, which is what a section that *begins*
+     under a scallop needs. */
+  .hs-scallop-up::before {
+    background: var(--scallop-to);
+    -webkit-mask-image: radial-gradient(
+      circle calc(var(--scallop-size) / 2) at 50% 100%,
+      #000 99.5%,
+      transparent 100%
+    );
+    mask-image: radial-gradient(
+      circle calc(var(--scallop-size) / 2) at 50% 100%,
+      #000 99.5%,
+      transparent 100%
+    );
+  }
+  .hs-scallop-up {
+    background: var(--scallop-from);
+  }
+
+  @media (max-width: 480px) {
+    /* Smaller bumps on a phone, so a 375px edge still reads as a row of scallops
+       and not as three enormous lumps. */
+    .hs-scallop {
+      --scallop-size: 24px;
+    }
+  }
+
+  /* --- The arched edge ------------------------------------------------------
+     The scallop's quieter sibling, for where a whole section should sit under
+     one dome instead of a row of them. Elliptical rather than circular: the
+     horizontal radius is half the width and the vertical radius is fixed, so the
+     arch stays the same height whether the section is 375px or 1400px wide. */
+
+  .hs-arch-top {
+    border-start-start-radius: 50% clamp(1.75rem, 6vw, 4rem);
+    border-start-end-radius: 50% clamp(1.75rem, 6vw, 4rem);
+    overflow: hidden;
+  }
+  .hs-arch-bottom {
+    border-end-start-radius: 50% clamp(1.75rem, 6vw, 4rem);
+    border-end-end-radius: 50% clamp(1.75rem, 6vw, 4rem);
+    overflow: hidden;
+  }
+
+  /* --- Display type ---------------------------------------------------------
+     Fluid here and only here. These headlines own the full width of a zine
+     surface, so they have room to scale; the product chrome keeps its fixed rem
+     scale, because a heading that shrinks inside a fixed sidebar column looks
+     broken rather than responsive. */
+
+  .hs-display {
+    font-size: clamp(2.125rem, 6.5vw, 4rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 0.99;
+    color: var(--hs-ink);
+    text-wrap: balance;
+  }
+  .hs-display-sm {
+    font-size: clamp(1.75rem, 4.5vw, 2.75rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.03;
+    color: var(--hs-ink);
+    text-wrap: balance;
+  }
+  .hs-band-pink .hs-display,
+  .hs-band-pink .hs-display-sm {
+    color: var(--hs-on-brand);
+  }
+
+  /* The modifier word. Set at the same size as the sans it sits beside, nudged
+     1.08em because Instrument Serif runs optically smaller at a matched em, and
+     given back the tracking the sans gives up — a serif italic at -0.035em
+     collides with itself. This is the system: every header on a zine surface
+     switches voice for exactly one word. */
+  .hs-em {
+    font-family: var(--font-em);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.08em;
+    letter-spacing: 0;
+    color: var(--hs-brand-deep);
+  }
+  .hs-band-pink .hs-em {
+    color: var(--hs-on-brand);
+  }
+
+  /* --- Tombstone cards ------------------------------------------------------
+     The arch-top card. No fill and no shadow: a 2px outline and the shape do the
+     work. `padding-top` clears the dome so a heading never rides up into the
+     curve.
+
+     Pink is the interactive outline and mint is the inert one, which is a
+     contrast rule wearing a shape rule's clothes: mint on white is 1.75:1 and
+     cannot legally be the only boundary of something you can click (WCAG
+     1.4.11), while pink-deep is 7.5:1 and can. */
+
+  .hs-card-arch {
+    position: relative;
+    background: transparent;
+    border: 2px solid var(--hs-brand);
+    border-radius: 50% 50% var(--radius-card) var(--radius-card) /
+      clamp(2rem, 7vw, 3.5rem) clamp(2rem, 7vw, 3.5rem) var(--radius-card) var(--radius-card);
+    padding: clamp(2rem, 6vw, 3rem) clamp(1.25rem, 4vw, 1.75rem) clamp(1.25rem, 3vw, 1.5rem);
+    text-align: center;
+    transition: border-color 0.18s ease, background-color 0.18s ease;
+  }
+  a.hs-card-arch:hover,
+  button.hs-card-arch:hover {
+    border-color: var(--hs-brand-deep);
+    background: var(--hs-tint);
+  }
+  /* Mint is illustration-adjacent and never the edge of a control. */
+  .hs-card-arch-mint {
+    border-color: var(--hs-mint);
+  }
+
+  /* An empty slot keeps the shape and loses the ink. Declared here rather than
+     reached for with Tailwind's `border-dashed`, because these shape classes are
+     unlayered and would win against the utility. */
+  .hs-card-dashed {
+    border-style: dashed;
+    border-color: var(--hs-edge);
+  }
+
+  /* Two more shapes, so a grid stops being one radius applied to everything. The
+     choice is by content type: a lozenge for a short standalone fact, a
+     turned-page corner for anything that represents a document. */
+  .hs-card-lozenge {
+    background: transparent;
+    border: 2px solid var(--hs-brand);
+    border-radius: var(--radius-pill);
+    padding: clamp(1.1rem, 3vw, 1.4rem) clamp(1.5rem, 4vw, 2rem);
+    text-align: center;
+  }
+  .hs-card-lozenge-mint {
+    border-color: var(--hs-mint);
+  }
+  .hs-card-dogear {
+    background: transparent;
+    border: 2px solid var(--hs-brand);
+    border-radius: var(--radius-card) var(--radius-card) var(--radius-card) 2.25rem;
+    padding: clamp(1.1rem, 3vw, 1.5rem);
+  }
+
+  /* --- Stickers -------------------------------------------------------------
+     Flat marker drawings. Sized in `em` so a sticker set inside a headline
+     scales with the headline instead of being pinned to a pixel size.
+
+     The five colours are their own tokens rather than the semantic roles, so a
+     sticker can be re-tinted for the ground it lands on without any risk of the
+     change leaking into a button or a card. Defaults are the light-mode brand;
+     dark mode inherits automatically because every default points at a role that
+     already flips. */
+
+
+  /* On a solid pink panel the whole set inverts: white ink, pale-pink fills. A
+     #be185d marker line on a #be185d ground is an invisible drawing. */
+  .hs-band-pink {
+    --sticker-ink: var(--hs-on-brand);
+    --sticker-fill: color-mix(in srgb, var(--hs-on-brand) 34%, transparent);
+    --sticker-alt: color-mix(in srgb, var(--hs-mint) 72%, var(--hs-on-brand));
+    --sticker-paper: color-mix(in srgb, var(--hs-on-brand) 12%, transparent);
+    --sticker-wash: color-mix(in srgb, var(--hs-on-brand) 20%, transparent);
+  }
+
+  /* No height here: the call site sets it with a utility, and now that these
+     rules are layered, that utility actually applies. */
+  .hs-sticker {
+    display: block;
+    width: auto;
+    overflow: visible;
+  }
+
+  /* The inline case: a sticker standing in for a word's space, mid-headline.
+     `-0.08em` sits it on the optical baseline of the sans rather than the
+     metric one, which is a few pixels low at display sizes. */
+  .hs-sticker-inline {
+    display: inline-block;
+    height: 0.82em;
+    width: auto;
+    vertical-align: -0.08em;
+    margin-inline: 0.16em;
+  }
+
+  /* Scattered at a section join. Absolutely positioned by the surface that uses
+     them, hidden from the reader below 640px — at phone width they land on top
+     of the words they are meant to decorate. */
+  .hs-sticker-scatter {
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+    z-index: 1;
+  }
+  @media (max-width: 639px) {
+    .hs-sticker-scatter {
+      display: none;
+    }
+  }
+
+  /* --- The hand-drawn ECG ---------------------------------------------------
+     The heartbeat is now drawn rather than plotted: the wobble lives in the path
+     data in `components/ui.tsx`, not in a filter, so it costs nothing to render
+     and looks the same on every machine. This class carries the ink weight. */
+
+  .hs-ecg-hand path {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* As a headline underline it draws itself once, on arrival, and then stops —
+     an underline that loops forever is a distraction sitting under the most
+     important words on the page. */
+  .hs-ecg-underline path {
+    stroke-dasharray: 300;
+    stroke-dashoffset: 300;
+    animation: hs-draw 1.15s cubic-bezier(0.22, 1, 0.36, 1) 0.25s forwards;
+  }
+
+  @keyframes hs-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* --- The one orchestrated moment ------------------------------------------
+     Reserved for a zine hero, and used nowhere else. Three steps, 90ms apart,
+     easing out on a quint curve. Everything animates from a visible default:
+     `hs-rise` only moves and fades, so if the animation never runs — a headless
+     render, a background tab, reduced motion — the content is already where it
+     belongs rather than stuck at opacity 0. */
+
+  .hs-rise {
+    animation: hs-rise 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .hs-rise-1 {
+    animation-delay: 0.04s;
+  }
+  .hs-rise-2 {
+    animation-delay: 0.13s;
+  }
+  .hs-rise-3 {
+    animation-delay: 0.22s;
+  }
+
+  @keyframes hs-rise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 14px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Reduced motion. Everything above that moves is decoration, so all of it
    stops — including the shimmer, which is the one people notice most.
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .hs-ecg path {
+  .hs-ecg path,
+  .hs-ecg-underline path {
     animation: none;
     stroke-dashoffset: 0;
+  }
+  /* The hero moment resolves instantly to its finished state rather than
+     playing fast. Nothing on a zine surface depends on the animation having
+     run, so there is nothing to crossfade in its place. */
+  .hs-rise {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
   .hs-skeleton {
     animation: none;
@@ -1341,11 +1801,46 @@ body[data-cookie-notice="1"] {
     max-width: none !important;
   }
 
-  .hs-card {
+  .hs-card,
+  .hs-card-arch,
+  .hs-card-lozenge,
+  .hs-card-dogear {
     border: 1px solid #ddd !important;
     box-shadow: none !important;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  /* On paper the shape language is cost without benefit: a scalloped edge is a
+     strip of solid ink, and an arched card wastes the top third of its box. All
+     of it flattens back to a rectangle. */
+  .hs-scallop {
+    display: none !important;
+  }
+  .hs-card-arch,
+  .hs-card-lozenge,
+  .hs-card-dogear {
+    border-radius: 4px !important;
+    padding: 0.6rem 0.8rem !important;
+    text-align: left !important;
+  }
+  .hs-band,
+  .hs-band-pink {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .hs-band-pad,
+  .hs-band-pad-lg {
+    padding-block: 0.5rem !important;
+  }
+  .hs-sticker-scatter {
+    display: none !important;
+  }
+  .hs-display {
+    font-size: 20pt;
+  }
+  .hs-display-sm {
+    font-size: 15pt;
   }
 
   .hs-h1 {

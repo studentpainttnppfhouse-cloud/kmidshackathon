@@ -6,7 +6,8 @@ import { EVENT_DAYS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/dates";
 import { isEventPanelVisible } from "@/lib/settings";
 import { CheckinButton, IncidentForm } from "@/components/event-widgets";
-import { Avatar, Banner, Card, EmptyState, SectionTitle } from "@/components/ui";
+import { StickerCross } from "@/components/stickers";
+import { Avatar, Banner, Card, EmptyState, SectionTitle, ZineHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Event Day" };
 export const dynamic = "force-dynamic";
@@ -82,25 +83,32 @@ export default async function EventPage({
 
   return (
     <div className="hs-enter space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="hs-eyebrow">Event-day mode</p>
-          <h1 className="hs-h1">Run sheet</h1>
-        </div>
-        <div className="flex gap-1.5">
+      <ZineHeader
+        eyebrow="Event-day mode"
+        title="Run sheet"
+        sticker={<StickerCross className="hs-sticker-inline" />}
+        action={
+          <div className="flex gap-1.5">
           {EVENT_DAYS.map((d, i) => (
             <a
               key={d}
               href={`/event?day=${d}`}
-              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-                day === d ? "bg-brand-solid text-on-brand" : "bg-surface text-muted hover:text-brand-deep"
+              /* On the pink masthead the day picker inverts: the chosen day is
+                 a solid white pill, the others are outlined in white. Reusing
+                 the on-page treatment here would have put a pink pill on a pink
+                 panel. */
+              className={`rounded-full border-2 px-3.5 py-1.5 text-sm font-semibold transition ${
+                day === d
+                  ? "border-on-brand bg-on-brand text-brand-deep"
+                  : "border-on-brand/45 text-on-brand hover:border-on-brand"
               }`}
             >
               Day {i + 1}
             </a>
           ))}
-        </div>
-      </header>
+          </div>
+        }
+      />
 
       {!panelVisible ? (
         <Banner tone="warn">

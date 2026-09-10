@@ -1,4 +1,11 @@
-import { Ecg } from "@/components/ui";
+import { Ecg, Mixed, Scallop } from "@/components/ui";
+import {
+  StickerBandage,
+  StickerCross,
+  StickerHeartbeat,
+  StickerPill,
+  StickerThermometer,
+} from "@/components/stickers";
 
 /**
  * The mark, on its brand tile.
@@ -15,10 +22,14 @@ export const MARK_PATH =
   "C26.6 15.5 30.2 18 32 21.4C33.8 18 37.4 15.5 41.6 15.5" +
   "C47.2 15.5 52 19.5 52 25.5C52 32.5 43.5 39.5 32 48Z";
 
-export function Logo({ size = 40 }: { size?: number }) {
+export function Logo({ size = 40, tone = "brand" }: { size?: number; tone?: "brand" | "invert" }) {
+  // On a solid pink panel the tile has to flip, or it disappears into its own
+  // background. Two tones rather than an opacity trick, so both stay flat.
+  const skin =
+    tone === "invert" ? "bg-on-brand text-brand-deep" : "bg-brand-solid text-on-brand";
   return (
     <span
-      className="inline-flex items-center justify-center rounded-[12px] bg-brand-solid text-on-brand"
+      className={`inline-flex items-center justify-center rounded-[14px] ${skin}`}
       style={{ width: size, height: size }}
       aria-hidden="true"
     >
@@ -57,18 +68,53 @@ export function AuthShell({
   footer?: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-brand-wash px-4 py-10">
-      <div className="w-full max-w-[420px]">
-        <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <Logo size={54} />
-          <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-brand-deep">{title}</h1>
-            {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
-          </div>
-          <Ecg className="w-28 text-brand/40" />
+    <main className="flex min-h-screen flex-col">
+      {/* The pink panel. Deep pink rather than the primary: this is a ground
+          carrying white type, and #ec4899 under white is 3.5:1 — a colour that
+          cannot hold text is not a colour you can build a panel out of. */}
+      <div className="hs-band hs-band-pink relative overflow-hidden px-4 pb-14 pt-16 sm:pb-20 sm:pt-24">
+        {/* Scattered at the join, and gone below 640px, where they would land
+            on the words rather than around them. */}
+        <StickerCross tilt={-14} className="hs-sticker-scatter left-[7%] top-[14%] h-20 lg:h-28" />
+        <StickerHeartbeat
+          tilt={11}
+          className="hs-sticker-scatter right-[8%] top-[12%] h-24 lg:h-32"
+        />
+        <StickerPill tilt={-8} className="hs-sticker-scatter bottom-[10%] left-[19%] h-16 lg:h-24" />
+        <StickerBandage
+          tilt={16}
+          className="hs-sticker-scatter bottom-[14%] right-[20%] h-16 lg:h-24"
+        />
+        <StickerThermometer
+          tilt={-6}
+          className="hs-sticker-scatter left-[26%] top-[8%] hidden h-20 xl:block"
+        />
+
+        <div className="relative z-[2] mx-auto flex w-full max-w-[620px] flex-col items-center gap-3 text-center">
+          <Logo size={56} tone="invert" />
+          {subtitle ? (
+            <p className="hs-rise hs-rise-1 hs-eyebrow text-on-brand">{subtitle}</p>
+          ) : null}
+          <h1 className="hs-rise hs-rise-2 hs-display">
+            <Mixed>{title}</Mixed>
+          </h1>
+          {/* The heartbeat as the headline's underline, drawn once on arrival.
+              This is the one orchestrated moment in the whole portal. */}
+          <Ecg underline className="hs-rise hs-rise-3 -mt-0.5 h-9 w-56 text-on-brand/90 sm:w-72" />
         </div>
-        <div className="hs-card p-6 shadow-[0_1px_3px_rgba(190,24,93,0.06)]">{children}</div>
-        {footer ? <div className="mt-5 text-center text-xs text-faint">{footer}</div> : null}
+      </div>
+
+      <Scallop from="pink" to="b" />
+
+      <div className="hs-band hs-band-b flex grow flex-col justify-center px-4 pb-14 pt-10">
+        <div className="mx-auto w-full max-w-[440px]">
+          <div className="hs-card border-brand/45 p-6">{children}</div>
+          {footer ? (
+            <div className="mx-auto mt-6 max-w-[38ch] text-center text-sm text-muted [text-wrap:pretty]">
+              {footer}
+            </div>
+          ) : null}
+        </div>
       </div>
     </main>
   );

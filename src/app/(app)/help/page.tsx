@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { requireViewer } from "@/lib/authorize";
 import { TIER_BLURB, TIER_LABEL, MIN_PASSWORD_LENGTH, SESSION_TTL_DAYS } from "@/lib/constants";
 import { Faq } from "@/components/chrome";
-import { Card, LastUpdated, PageHeader, SectionTitle } from "@/components/ui";
+import { StickerHeartbeat } from "@/components/stickers";
+import { Card, LastUpdated, SectionTitle, ZineHeader } from "@/components/ui";
 import type { Tier } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Help" };
@@ -37,10 +38,11 @@ export default async function HelpPage() {
 
   return (
     <div className="hs-enter space-y-5">
-      <PageHeader
+      <ZineHeader
         eyebrow="Help"
         title="How the portal works"
         subtitle="The things people ask a head over LINE, written down once."
+        sticker={<StickerHeartbeat className="hs-sticker-inline" />}
       />
 
       <Card>
