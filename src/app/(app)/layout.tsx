@@ -33,19 +33,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   const items: NavItem[] = [
-    { href: "/dashboard", label: "Dashboard", icon: "◆" },
-    { href: "/assignments", label: "Assignments", badge: myOpenTasks || undefined, icon: "✓" },
-    { href: "/departments", label: "Departments", icon: "▦" },
-    { href: "/people", label: "People", icon: "☺" },
-    { href: "/documents", label: "Documents", icon: "▤" },
-    { href: "/files", label: "Files & Assets", icon: "⬚" },
-    { href: "/brand", label: "Brand Kit", icon: "❋" },
-    { href: "/forms", label: "Forms", icon: "▣" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/assignments", label: "Assignments", badge: myOpenTasks || undefined },
+    { href: "/departments", label: "Departments" },
+    { href: "/people", label: "People" },
+    { href: "/documents", label: "Documents" },
+    { href: "/files", label: "Files & Assets" },
+    { href: "/brand", label: "Brand Kit" },
+    { href: "/forms", label: "Forms" },
     {
       href: "/announcements",
       label: "Announcements",
       badge: unreadAnnouncements || undefined,
-      icon: "◈",
     },
   ];
 
@@ -58,12 +57,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     items.push({
       href: "/event",
       label: eventVisible ? "Event Day" : "Event Day (hidden)",
-      icon: "★",
     });
   }
 
-  if (isAdmin(viewer)) items.push({ href: "/admin", label: "Admin", icon: "⚙" });
-  if (isOwner(viewer)) items.push({ href: "/admin/audit", label: "Audit log", icon: "≡" });
+  if (isAdmin(viewer)) items.push({ href: "/admin", label: "Admin" });
+  if (isOwner(viewer)) items.push({ href: "/admin/audit", label: "Audit log" });
 
   return (
     <div className="lg:flex">

@@ -56,8 +56,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Two families on a real contrast axis: a heavy geometric sans that
+            carries display, UI and body, and a high-contrast serif used only in
+            italic, at the same size, for the modifier word inside a heading.
+            Nothing here pairs two sans-serifs against each other. */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@1&display=swap"
           rel="stylesheet"
         />
         <ThemeScript nonce={nonce} />

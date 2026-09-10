@@ -8,7 +8,16 @@ import { Avatar, TierPill } from "@/components/ui";
 import { ThemeToggle } from "@/components/chrome";
 import type { Tier } from "@prisma/client";
 
-export type NavItem = { href: string; label: string; badge?: number; icon?: string };
+/**
+ * A navigation item is a word and, sometimes, a count.
+ *
+ * There used to be an `icon` here too — one Unicode glyph per row (◆ for
+ * Dashboard, ▦ for Departments, ❋ for Brand Kit). None of them meant anything:
+ * they were geometric shapes assigned to labels, so they added a column of
+ * visual noise the eye had to skip past to reach the word that actually carried
+ * the destination. The label is the icon.
+ */
+export type NavItem = { href: string; label: string; badge?: number };
 
 /**
  * The portal's one navigation, in two shapes.
@@ -73,14 +82,7 @@ export function AppNav({
               : "text-muted hover:bg-tint/60 hover:text-brand-deep"
           }`}
         >
-          <span className="flex min-w-0 items-center gap-2.5">
-            {item.icon ? (
-              <span aria-hidden="true" className="w-4 shrink-0 text-center opacity-80">
-                {item.icon}
-              </span>
-            ) : null}
-            <span className="truncate">{item.label}</span>
-          </span>
+          <span className="min-w-0 truncate">{item.label}</span>
           {item.badge ? (
             <span className="rounded-full bg-brand-solid px-1.5 py-0.5 text-[11px] font-bold text-on-brand">
               {item.badge}

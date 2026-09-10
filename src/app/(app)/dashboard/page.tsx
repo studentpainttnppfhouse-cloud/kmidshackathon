@@ -6,15 +6,7 @@ import { EVENT_START } from "@/lib/constants";
 import { endOfWeek, timeAgo } from "@/lib/dates";
 import { Countdown } from "@/components/countdown";
 import { AssignmentRow, type AssignmentSummary } from "@/components/assignment-row";
-import {
-  Avatar,
-  Banner,
-  Card,
-  EmptyState,
-  ProgressBar,
-  SectionTitle,
-  Stat,
-} from "@/components/ui";
+import { Avatar, Banner, Card, EmptyState, ProgressBar, SectionTitle, Stat, ZineHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -117,15 +109,15 @@ export default async function DashboardPage({
         </Banner>
       ) : null}
 
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="hs-eyebrow">Dashboard</p>
-          <h1 className="hs-h1">Hi, {greeting}</h1>
-        </div>
-        <Link href="/assignments?view=mine" className="hs-btn hs-btn-secondary">
-          My tasks
-        </Link>
-      </header>
+      <ZineHeader
+        eyebrow="Dashboard"
+        title={`Hi, ${greeting}`}
+        action={
+          <Link href="/assignments?view=mine" className="hs-btn hs-btn-secondary">
+            My tasks
+          </Link>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
