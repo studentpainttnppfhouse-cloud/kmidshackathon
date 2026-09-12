@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import { requireViewer, can } from "@/lib/authorize";
+import { requirePageAccess, can } from "@/lib/authorize";
 import { DocumentEditor } from "@/components/document-editor";
 import { PageHeader } from "@/components/ui";
 
@@ -10,7 +10,8 @@ export const metadata: Metadata = { title: "Edit document" };
 export const dynamic = "force-dynamic";
 
 export default async function EditDocumentPage({ params }: { params: Promise<{ id: string }> }) {
-  const viewer = await requireViewer();
+  // A composer, not a page: a tier held at Read on documents never reaches it.
+  const viewer = await requirePageAccess("documents", "edit");
   const { id } = await params;
 
   const document = await db.document.findUnique({ where: { id } });

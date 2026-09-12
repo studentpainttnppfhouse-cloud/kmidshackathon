@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { SESSION_TTL_DAYS } from "@/lib/constants";
+import { grantsForTier } from "@/lib/page-access";
 import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/cookies";
 import type { Viewer } from "@/lib/policy";
 
@@ -88,7 +89,12 @@ export async function getViewer(): Promise<Viewer | null> {
     });
   }
 
-  return user as Viewer;
+  // The owner's page grid, resolved once here so that every `can()` call
+  // downstream stays synchronous. `grantsForTier` is request-cached, so the
+  // layout, the page and each server action share the one query.
+  const pageGrants = await grantsForTier(user.tier);
+
+  return { ...user, pageGrants } as Viewer;
 }
 
 export async function destroyCurrentSession(): Promise<void> {

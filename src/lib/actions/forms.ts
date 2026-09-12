@@ -235,7 +235,16 @@ export async function submitFormResponse(_prev: FormState, formData: FormData): 
   if (!form || form.deletedAt || form.type !== "internal") {
     return { error: "That form is not available." };
   }
-  if (!can(viewer, "read", { kind: "form", departmentId: form.departmentId, ownerId: form.ownerId })) {
+  // "comment" rather than "read": answering a form is the one write a tier held
+  // below Full on this page is still meant to be able to do, and the page grid
+  // draws the line in exactly that place.
+  if (
+    !can(viewer, "comment", {
+      kind: "form",
+      departmentId: form.departmentId,
+      ownerId: form.ownerId,
+    })
+  ) {
     return { error: "That form is not available." };
   }
   if (!form.isOpen) return { error: "This form is closed." };

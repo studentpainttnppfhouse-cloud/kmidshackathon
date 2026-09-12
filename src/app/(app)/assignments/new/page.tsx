@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireViewer, isAdmin, can } from "@/lib/authorize";
+import { requirePageAccess, isAdmin, can } from "@/lib/authorize";
 import { AssignmentForm } from "@/components/assignment-form";
 import { PageHeader } from "@/components/ui";
 
@@ -21,7 +21,8 @@ export default async function NewAssignmentPage({
 }: {
   searchParams: Promise<{ dept?: string }>;
 }) {
-  const viewer = await requireViewer();
+  // A composer, not a page: a tier held at Read on assignments never reaches it.
+  const viewer = await requirePageAccess("assignments", "edit");
   const { dept } = await searchParams;
 
   const [departments, people] = await Promise.all([

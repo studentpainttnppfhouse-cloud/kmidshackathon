@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireViewer, can } from "@/lib/authorize";
+import { requirePageAccess, can } from "@/lib/authorize";
 import { PeopleImport } from "@/components/people-import";
 import { Card, PageHeader, SectionTitle } from "@/components/ui";
 
@@ -9,7 +9,8 @@ export const metadata: Metadata = { title: "Import people" };
 export const dynamic = "force-dynamic";
 
 export default async function ImportPeoplePage() {
-  const viewer = await requireViewer();
+  // A composer, not a page: a tier held at Read on people never reaches it.
+  const viewer = await requirePageAccess("people", "edit");
 
   // The page checks the same permission the action does. Reaching it by URL is
   // not a way around the button not being there.

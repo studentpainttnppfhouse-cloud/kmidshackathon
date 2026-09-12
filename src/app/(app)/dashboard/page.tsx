@@ -105,7 +105,9 @@ export default async function DashboardPage({
     <div className="space-y-6">
       {denied ? (
         <Banner tone="warn">
-          That area needs a higher permission tier than your account has.
+          {denied === "page"
+            ? "That page is switched off for your tier. An owner can turn it back on from Admin → Page access."
+            : "That area needs a higher permission tier than your account has."}
         </Banner>
       ) : null}
 

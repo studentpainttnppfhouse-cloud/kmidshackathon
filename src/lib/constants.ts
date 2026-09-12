@@ -176,7 +176,7 @@ export const TEAMS: readonly Team[] = [
     slug: "marketing",
     color: "#EC4899",
     sortOrder: 2,
-    slots: 3,
+    slots: 4,
     description: "Reaching the schools and the students: campaigns, posters, outreach.",
     roles: [
       { title: "Marketing Head", tier: "T2_HEAD", lead: true },
@@ -188,7 +188,7 @@ export const TEAMS: readonly Team[] = [
     slug: "accounting",
     color: "#22C55E",
     sortOrder: 3,
-    slots: 1,
+    slots: 2,
     description: "Budget, receipts, reimbursements, and what the event actually costs.",
     roles: [
       { title: "Accounting Head", tier: "T2_HEAD", lead: true },
@@ -238,14 +238,17 @@ export const TEAMS: readonly Team[] = [
     sortOrder: 7,
     slots: 3,
     description: "The voice of the event: opening, transitions, awards, and the script behind them.",
-    roles: [{ title: "MC", tier: "T1_MEMBER" }],
+    roles: [
+      { title: "Lead MC", tier: "T2_HEAD", lead: true },
+      { title: "MC", tier: "T1_MEMBER" },
+    ],
   },
   {
     name: "Documentation, Rubric & Registration",
     slug: "documentation",
     color: "#2DD4BF",
     sortOrder: 8,
-    slots: 4,
+    slots: 5,
     description: "Proposals, the judging rubric, participant registration, and the paper trail.",
     roles: [
       { title: "Documentation Head", tier: "T2_HEAD", lead: true },
@@ -258,7 +261,7 @@ export const TEAMS: readonly Team[] = [
     slug: "social",
     color: "#DB2777",
     sortOrder: 9,
-    slots: 3,
+    slots: 5,
     description: "Content calendar, posting, captions, and everything the public sees.",
     roles: [
       { title: "Social Media Head", tier: "T2_HEAD", lead: true },
@@ -272,7 +275,10 @@ export const TEAMS: readonly Team[] = [
     sortOrder: 10,
     slots: 3,
     description: "Unassigned on purpose. Wherever the day is short-handed, they go there.",
-    roles: [{ title: "Floater", tier: "T1_MEMBER" }],
+    roles: [
+      { title: "Floater Lead", tier: "T2_HEAD", lead: true },
+      { title: "Floater", tier: "T1_MEMBER" },
+    ],
   },
   {
     name: "Advisors",

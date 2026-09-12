@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireViewer, can } from "@/lib/authorize";
+import { requirePageAccess, can } from "@/lib/authorize";
 import { FormBuilder } from "@/components/form-builder";
 import { PageHeader } from "@/components/ui";
 import { parseDefinition } from "@/lib/forms-schema";
@@ -11,7 +11,8 @@ export const metadata: Metadata = { title: "Edit form" };
 export const dynamic = "force-dynamic";
 
 export default async function EditFormPage({ params }: { params: Promise<{ id: string }> }) {
-  const viewer = await requireViewer();
+  // A composer, not a page: a tier held at Read on forms never reaches it.
+  const viewer = await requirePageAccess("forms", "edit");
   const { id } = await params;
 
   const form = await db.form.findUnique({ where: { id } });
