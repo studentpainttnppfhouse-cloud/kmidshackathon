@@ -9,6 +9,7 @@ import { assertCan, can, type Resource, type Viewer } from "@/lib/authorize";
 import { requireViewer } from "@/lib/authorize";
 import { optionalUrlSchema } from "@/lib/url";
 import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
+import { notifyNewAssignment } from "@/lib/teams/notify";
 import type { FormState } from "@/lib/actions/auth";
 import type { AssignmentStatus, Priority } from "@prisma/client";
 
@@ -168,6 +169,19 @@ export async function createAssignment(_prev: FormState, formData: FormData): Pr
   });
 
   await audit(viewer.id, "assignment.created", { type: "assignment", id: created.id, detail: d.title });
+
+  // Told about after it exists. Whether anything is actually sent is the
+  // department's ASSIGNMENT_NEW rule's decision, not this action's.
+  await notifyNewAssignment({
+    assignmentId: created.id,
+    title: d.title,
+    departmentId: d.departmentId,
+    assigneeIds,
+    dueDate: created.dueDate,
+    priority: d.priority,
+    createdById: viewer.id,
+    createdByName: viewer.nickname ?? viewer.name,
+  });
 
   revalidatePath("/assignments");
   revalidatePath("/dashboard");

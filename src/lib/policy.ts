@@ -31,7 +31,9 @@ export type Action =
   | "view_audit"
   | "export"
   | "archive"
-  | "view_private_notes";
+  | "view_private_notes"
+  | "notify"
+  | "manage_notifications";
 
 /** Anything with a department and an owner can be checked against a viewer. */
 export type Resource =
@@ -44,6 +46,7 @@ export type Resource =
   | { kind: "user"; userId: string }
   | { kind: "form"; departmentId: string | null; ownerId: string }
   | { kind: "incident" }
+  | { kind: "notification"; departmentId: string | null }
   | { kind: "private_notes" }
   | { kind: "system" };
 
@@ -96,6 +99,15 @@ export function can(user: Viewer | null, action: Action, resource: Resource): bo
     return isAdmin(user);
   }
 
+  // A Teams webhook URL is a credential: whoever holds it can post into a staff
+  // channel as the portal, forever, with no further check. Adding, editing and
+  // removing one is therefore Admin work even though *using* one is a head's.
+  // The same call covers the portal-wide notification rules, which speak for
+  // every department at once.
+  if (action === "manage_notifications") {
+    return isAdmin(user);
+  }
+
   // D1: interview scores and internal performance notes are T3+ only.
   // Advisors do not see them, regardless of their broad read access.
   if (action === "view_private_notes" || resource.kind === "private_notes") {
@@ -111,6 +123,13 @@ export function can(user: Viewer | null, action: Action, resource: Resource): bo
       case "user":
       case "system":
         return true;
+      case "notification":
+        // The delivery log names who was chased about what, which is a
+        // management view rather than a shared one. Heads see their own
+        // department and the all-staff channel; admins see everything.
+        if (isAdmin(user)) return true;
+        if (user.tier !== "T2_HEAD") return false;
+        return resource.departmentId === null || user.departmentId === resource.departmentId;
       case "announcement":
         return (
           resource.departmentId === null ||
@@ -169,6 +188,15 @@ export function can(user: Viewer | null, action: Action, resource: Resource): bo
     case "form": {
       if (action === "create") return headOf(user, resource.departmentId);
       return resource.ownerId === user.id || headOf(user, resource.departmentId);
+    }
+
+    case "notification": {
+      if (action !== "notify") return false;
+      // All-staff goes to everybody's phone, so it stays with Admin — who
+      // returned true above and never reach this line. A head speaks for their
+      // own department and nobody else's.
+      if (resource.departmentId === null) return false;
+      return headOf(user, resource.departmentId);
     }
 
     case "comment":

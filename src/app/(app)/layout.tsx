@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getViewer } from "@/lib/session";
-import { isAdmin, isOwner } from "@/lib/authorize";
+import { can, isAdmin, isOwner } from "@/lib/authorize";
 import { signOut } from "@/lib/actions/auth";
 import { SETTING_KEYS, getSettings } from "@/lib/settings";
 import { safeHref } from "@/lib/url";
@@ -59,6 +59,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       label: eventVisible ? "Event Day" : "Event Day (hidden)",
     });
   }
+
+  // Teams notifications are a head's tool, so the link appears for anyone who
+  // may send to at least one department. `can()` decides; this only draws.
+  const canNotify =
+    can(viewer, "notify", { kind: "notification", departmentId: null }) ||
+    (viewer.departmentId !== null &&
+      can(viewer, "notify", { kind: "notification", departmentId: viewer.departmentId }));
+  if (canNotify) items.push({ href: "/notifications", label: "Teams alerts" });
 
   if (isAdmin(viewer)) items.push({ href: "/admin", label: "Admin" });
   if (isOwner(viewer)) items.push({ href: "/admin/audit", label: "Audit log" });

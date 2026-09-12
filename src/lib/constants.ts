@@ -309,3 +309,44 @@ export function tierForRole(title: string): Tier | null {
   );
   return match ? match.tier : null;
 }
+
+/**
+ * Teams notifications, as the control panel names them.
+ *
+ * Each label is written as the sentence a head reads next to a switch, not as
+ * the enum spelled out: "When a task is about to be due" says what turning it
+ * on will do, where "ASSIGNMENT_DUE" needs translating first.
+ */
+export const NOTIFICATION_KIND_LABEL = {
+  MANUAL: "Sent by hand",
+  ANNOUNCEMENT: "New announcement",
+  ASSIGNMENT_NEW: "A task is assigned",
+  ASSIGNMENT_DUE: "A task is due soon",
+  ASSIGNMENT_OVERDUE: "A task is overdue",
+  EVENT_SOON: "Something on the run sheet is starting",
+} as const;
+
+export const NOTIFICATION_KIND_BLURB = {
+  MANUAL: "Messages a head or admin writes on this page.",
+  ANNOUNCEMENT: "Posts the announcement to the channel as soon as it goes up.",
+  ASSIGNMENT_NEW: "Tells the channel, and mentions whoever it was given to.",
+  ASSIGNMENT_DUE: "One reminder a day while the deadline is inside the warning window.",
+  ASSIGNMENT_OVERDUE: "One reminder a day until the task is marked done or approved.",
+  EVENT_SOON: "Event-day only. Warns before an item on the run sheet starts.",
+} as const;
+
+/** The kinds a head may switch on for their own department. */
+export const AUTOMATIC_KINDS = [
+  "ANNOUNCEMENT",
+  "ASSIGNMENT_NEW",
+  "ASSIGNMENT_DUE",
+  "ASSIGNMENT_OVERDUE",
+  "EVENT_SOON",
+] as const;
+
+export const NOTIFICATION_STATUS_LABEL = {
+  QUEUED: "Waiting to send",
+  SENT: "Sent",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
+} as const;

@@ -255,3 +255,57 @@ test("comments belong to their author", () => {
   assert.equal(can(member, "delete", { kind: "comment", authorId: "other" }), false);
   assert.equal(can(admin, "delete", { kind: "comment", authorId: "other" }), true);
 });
+
+// --- Teams notifications ----------------------------------------------------
+//
+// The reach of a notification is wider than anything else in the portal: it
+// leaves the app and arrives on a phone. These are the checks that keep that
+// reach matched to the tier holding it.
+
+test("a head notifies their own department and nobody else's", () => {
+  assert.equal(can(head, "notify", { kind: "notification", departmentId: DEPT_A }), true);
+  assert.equal(can(head, "notify", { kind: "notification", departmentId: DEPT_B }), false);
+});
+
+test("all-staff notifications are Administration-only", () => {
+  assert.equal(can(head, "notify", { kind: "notification", departmentId: null }), false);
+  assert.equal(can(admin, "notify", { kind: "notification", departmentId: null }), true);
+  assert.equal(can(owner, "notify", { kind: "notification", departmentId: null }), true);
+});
+
+test("members and advisors never send notifications", () => {
+  for (const person of [member, advisor]) {
+    assert.equal(can(person, "notify", { kind: "notification", departmentId: DEPT_A }), false);
+    assert.equal(can(person, "notify", { kind: "notification", departmentId: null }), false);
+  }
+});
+
+test("a webhook URL is a credential, so only Administration manages one", () => {
+  // A head may *use* the channel their department is wired to and may never
+  // change what it points at.
+  assert.equal(can(head, "manage_notifications", { kind: "system" }), false);
+  assert.equal(can(member, "manage_notifications", { kind: "system" }), false);
+  assert.equal(can(advisor, "manage_notifications", { kind: "system" }), false);
+  assert.equal(can(admin, "manage_notifications", { kind: "system" }), true);
+  assert.equal(can(owner, "manage_notifications", { kind: "system" }), true);
+});
+
+test("the delivery log follows the same department line as sending", () => {
+  assert.equal(can(head, "read", { kind: "notification", departmentId: DEPT_A }), true);
+  assert.equal(can(head, "read", { kind: "notification", departmentId: DEPT_B }), false);
+  // The all-staff channel is readable by a head; posting to it is not.
+  assert.equal(can(head, "read", { kind: "notification", departmentId: null }), true);
+  assert.equal(can(member, "read", { kind: "notification", departmentId: DEPT_A }), false);
+  assert.equal(can(admin, "read", { kind: "notification", departmentId: DEPT_B }), true);
+});
+
+test("an alumni head cannot notify, whatever their tier says", () => {
+  const retired = user("T2_HEAD", { isAlumni: true });
+  assert.equal(can(retired, "notify", { kind: "notification", departmentId: DEPT_A }), false);
+  assert.equal(can(retired, "read", { kind: "notification", departmentId: DEPT_A }), true);
+});
+
+test("a signed-out visitor sends nothing", () => {
+  assert.equal(can(null, "notify", { kind: "notification", departmentId: DEPT_A }), false);
+  assert.equal(can(null, "manage_notifications", { kind: "system" }), false);
+});

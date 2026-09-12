@@ -38,6 +38,12 @@ services:
         # Render generates this once and keeps it across deploys. Sessions do
         # not depend on it, so even a rotation would not sign anybody out.
         generateValue: true
+      - key: TEAMS_DISPATCH_SECRET
+        # Guards /api/teams/dispatch, which is what actually sends queued Teams
+        # messages. Render generates it; copy it into whatever calls the
+        # endpoint on a schedule. Without it the dispatcher stays switched off
+        # and messages queue forever. See docs/TEAMS.md.
+        generateValue: true
       - key: NODE_VERSION
         value: "22"
       - key: NODE_ENV

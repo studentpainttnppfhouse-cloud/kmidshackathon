@@ -78,6 +78,11 @@ Read as: *can this person do X to a resource in **their own** department?*
 | Delete (to the recycle bin) | — | own | ✅ | ✅ | ✅ |
 | Announce to own department | — | — | ✅ | ✅ | ✅ |
 | Announce to all staff | — | — | — | ✅ | ✅ |
+| Send a Teams notification to own department | — | — | ✅ | ✅ | ✅ |
+| Send a Teams notification to all staff | — | — | — | ✅ | ✅ |
+| Turn automatic Teams rules on | — | — | ✅² | ✅ | ✅ |
+| Add or remove a Teams webhook URL | — | — | — | ✅ | ✅ |
+| Read the Teams delivery log | — | — | ✅ | ✅ | ✅ |
 | Read the incident log | — | — | — | ✅ | ✅ |
 | Read the audit log | — | — | — | ✅ | ✅ |
 | Interview scores, performance notes | — | — | — | ✅ | ✅ |
@@ -88,6 +93,12 @@ Read as: *can this person do X to a resource in **their own** department?*
 
 ¹ Advisors may approve documents and assignments — that is the one write-shaped
 thing they can do — but nothing else.
+
+² For their own department only. The portal-wide defaults, which speak for every
+department at once, are T3. So is the webhook URL: a head *uses* the channel
+their department is wired to and can never change where it points, because
+whoever holds that URL can post into the channel as the portal indefinitely.
+Run sheet reminders are portal-wide by nature and are T3 for that reason.
 
 **Cross-department:** a T2 Head has no write access outside their own
 department. Not to approve, not to assign, not to delete. Only T3 and above

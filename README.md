@@ -99,6 +99,7 @@ Then set the environment variables:
 | `OWNER_EMAIL` | your school address — this is how you get the first account |
 | `AUTH_SECRET` | `openssl rand -base64 32` (the blueprint generates it for you) |
 | `NODE_VERSION` | `22` |
+| `TEAMS_DISPATCH_SECRET` | optional — only if you want Teams notifications; see `docs/TEAMS.md` |
 
 Deploy. `npm start` runs `db:bootstrap` before Next starts (the `prestart`
 script), so migrations are applied on every boot and a service that was set up
@@ -208,9 +209,51 @@ npm run dev
 | Site-wide search across everything you may read | Done |
 | Event-day mode — run sheet, check-in, incident log; hideable until needed | Done |
 | Admin — accounts, tiers, invites, bulk import, resets, sessions, audit, export | Done |
+| Microsoft Teams notifications — deadlines, announcements and urgent pushes, head/admin controlled | Done |
 | Dark mode, print stylesheet, loading states, keyboard and screen-reader paths | Done |
 | Social Media Command Center | Phase 3 — schema is in place |
 | Archive & handover freeze | Phase 6 — `year` columns and export already work |
+
+## Telling people in Teams
+
+The portal can push what changes here into Microsoft Teams: deadlines that are
+close, tasks that are late, announcements as they go up, and anything a head
+types on the **Teams alerts** page.
+
+Two halves, and they cost very different amounts to switch on.
+
+| | Channel posts | Personal notifications |
+| --- | --- | --- |
+| Reaches | a Teams channel | one person's Activity feed |
+| Needs | a webhook URL copied from the channel | an Azure app registration |
+| Set up by | whoever owns the channel | a Microsoft 365 tenant admin |
+| Takes | about a minute | a conversation with IT |
+
+Channel posts cover most of it and need nobody's permission but your own, so
+start there. Both are optional: with none of it configured the page still loads
+and says exactly what is missing.
+
+Who can do what follows the same department line as everything else — a head
+speaks for their own team and nobody else's:
+
+| | Member | Head | Admin |
+| --- | --- | --- | --- |
+| Send to own department | no | yes | yes |
+| Send to all staff | no | no | yes |
+| Send privately to a named person | no | own department | anyone |
+| Turn automatic rules on | no | own department | portal-wide |
+| Add or remove a webhook URL | no | no | yes |
+
+A webhook URL is a credential — anyone holding it can post into the channel as
+the portal — so it is encrypted at rest, never shown to a browser again, and the
+portal will only ever POST to Microsoft's own webhook hosts.
+
+Messages are queued rather than sent while somebody waits: the announcement is
+saved whether or not Microsoft is having a morning. A scheduler calls
+`/api/teams/dispatch` to drain the queue, which needs `TEAMS_DISPATCH_SECRET`
+set. Without it, messages queue and the page says so.
+
+Full setup, including the Azure half and what every error means: **`docs/TEAMS.md`**.
 
 ## Writing documents in the portal
 

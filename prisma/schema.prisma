@@ -84,6 +84,9 @@ model User {
   checkins          Checkin[]
   incidents         Incident[]
   auditEntries      AuditLog[]
+  teamsIdentity     TeamsIdentity?
+  notificationsGot  NotificationJob[]    @relation("NotificationRecipient")
+  notificationsSent NotificationJob[]    @relation("NotificationCreatedBy")
 
   @@index([departmentId])
   @@index([tier])
@@ -183,6 +186,10 @@ model Department {
   files         FileAsset[]
   forms         Form[]
   announcements Announcement[]
+
+  teamsTargets      TeamsTarget[]
+  notificationRules NotificationRule[]
+  notificationJobs  NotificationJob[]
 
   @@index([headUserId])
   @@map("departments")
@@ -670,4 +677,226 @@ model AttachmentChunk {
 
   @@unique([attachmentId, idx])
   @@map("attachment_chunks")
+}
+
+// ---------------------------------------------------------------------------
+// Microsoft Teams — telling people, where they already are
+// ---------------------------------------------------------------------------
+
+/// What made the portal want to say something.
+enum NotificationKind {
+  MANUAL
+  ANNOUNCEMENT
+  ASSIGNMENT_NEW
+  ASSIGNMENT_DUE
+  ASSIGNMENT_OVERDUE
+  EVENT_SOON
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+/// A place in Teams the portal may post to.
+///
+/// Two transports, and the difference is administrative rather than technical:
+///
+///   "webhook" — an Incoming Webhook / Power Automate Workflows URL that a
+///               channel owner creates from inside Teams in about a minute. No
+///               Azure tenant admin is involved, which is the whole reason it
+///               is the default. Posts to a channel; cannot open a private
+///               chat with one person.
+///   "graph"   — Microsoft Graph, app-only. This is the one that can ping an
+///               individual, and it needs a tenant admin to register an app
+///               and consent to TeamsActivity.Send. Configured by environment
+///               variable, not here, because it is a credential for the whole
+///               deployment rather than for one channel.
+///
+/// `webhookUrl` is a bearer credential: anyone holding it can post into the
+/// channel as the portal. It is encrypted at rest with the same AES-256-GCM
+/// helper that covers phone numbers, and it is never sent back to a browser —
+/// the admin screen shows the host and the last four characters only.
+model TeamsTarget {
+  id    String @id @default(cuid())
+  label String
+
+  /// "webhook" today. Left as a column so a second transport does not need a
+  /// migration to become expressible.
+  transport String @default("webhook") @db.VarChar(16)
+
+  /// AES-256-GCM ciphertext. See src/lib/crypto.ts.
+  webhookUrl String @db.Text
+  /// Host of the URL, in the clear, so the admin list can say where posts go
+  /// without the ciphertext ever being decrypted for a page render.
+  urlHost    String @default("") @db.VarChar(190)
+  /// Last four characters of the URL, for telling two webhooks apart.
+  urlHint    String @default("") @db.VarChar(8)
+
+  /// Null means the all-staff channel. Otherwise the department this posts for.
+  departmentId String?
+  isActive     Boolean @default(true)
+
+  createdById String
+  sendCount   Int       @default(0)
+  lastOkAt    DateTime?
+  lastErrorAt DateTime?
+  lastError   String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department   Department?       @relation(fields: [departmentId], references: [id])
+  rules        NotificationRule[]
+  jobs         NotificationJob[]
+
+  @@index([departmentId])
+  @@index([isActive])
+  @@map("teams_targets")
+}
+
+/// Which Teams account a portal account belongs to.
+///
+/// Needed for the two things a channel post cannot do on its own: @mentioning
+/// the right person inside a card, and sending that person a personal activity
+/// notification. The portal already knows a school email; Teams keys on the
+/// same UPN in this tenant, so the link is usually a copy of `users.email` and
+/// the row exists mainly so that the exceptions are recordable.
+model TeamsIdentity {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  /// User principal name — nearly always the school address.
+  upn String @db.VarChar(190)
+  /// Entra object id (a GUID). Graph can resolve a UPN, so this is optional,
+  /// but a stored id is one lookup less and survives a rename.
+  aadObjectId String? @db.VarChar(64)
+  /// What to write in an @mention. Falls back to the portal name.
+  displayName String? @db.VarChar(190)
+
+  /// Set the first time Graph confirmed this person exists in the tenant.
+  verifiedAt DateTime?
+  /// Off means "never ping this person directly", whatever a rule says.
+  optedOut   Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([upn])
+  @@map("teams_identities")
+}
+
+/// One switch: "when X happens in this department, post to Teams".
+///
+/// Rules are per department so a head can turn their own team's reminders on
+/// without speaking for anybody else's, and a row with a null `departmentId`
+/// is the portal-wide default that applies where no department row exists.
+///
+/// The unique index below is honest about only half the job: MySQL counts every
+/// NULL as distinct, so it enforces one rule per (kind, department) for a real
+/// department and nothing at all for the portal-wide row. Writes go through
+/// `updateMany` for that reason — see saveNotificationRule().
+model NotificationRule {
+  id           String           @id @default(cuid())
+  kind         NotificationKind
+  departmentId String?
+
+  enabled Boolean @default(false)
+
+  /// ASSIGNMENT_DUE only: how many hours ahead of the deadline to warn.
+  leadHours Int @default(24)
+  /// Skip anything below this priority. MEDIUM by default for due reminders.
+  minPriority Priority @default(LOW)
+  /// Also send the assignees a personal Teams notification, not just a channel
+  /// post. Requires Graph to be configured; ignored otherwise.
+  pingPeople Boolean @default(false)
+
+  /// Which channel to post in. Null resolves to the department's target, then
+  /// to the all-staff one.
+  targetId String?
+
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  department Department?  @relation(fields: [departmentId], references: [id])
+  target     TeamsTarget? @relation(fields: [targetId], references: [id])
+
+  @@unique([kind, departmentId])
+  @@index([enabled])
+  @@index([targetId])
+  @@index([departmentId])
+  @@map("notification_rules")
+}
+
+/// One message the portal wants delivered, and what happened to it.
+///
+/// Sending is queued rather than done inline. A Server Action that posts to
+/// Teams while the person waits ties the success of their click to a third
+/// party being up: Teams times out, the action throws, and the announcement
+/// they wrote is lost along with the delivery. So the write commits, a row
+/// lands here, and the dispatcher — /api/teams/dispatch, called on a schedule —
+/// does the talking. A failure is then a row with an error on it that an admin
+/// can read and retry, instead of a stack trace nobody saw.
+///
+/// `dedupeKey` is what stops a reminder being sent twice. "This assignment, this
+/// rule, this day" hashes to one key, and the unique index makes the second
+/// attempt a no-op at the database rather than a judgement call in code that
+/// two overlapping dispatch runs could both get wrong.
+model NotificationJob {
+  id     String             @id @default(cuid())
+  kind   NotificationKind
+  status NotificationStatus @default(QUEUED)
+
+  title String
+  body  String  @db.Text
+  /// Deep link back into the portal: the task, the announcement, the run sheet.
+  url   String? @db.Text
+
+  priority     Priority @default(MEDIUM)
+  departmentId String?
+
+  /// Where it goes. A channel post has `targetId`; a personal Teams ping has
+  /// `recipientUserId`. Exactly one is set.
+  targetId        String?
+  recipientUserId String?
+
+  /// Portal accounts to @mention inside a channel post, as a JSON array of ids.
+  mentionUserIds Json?
+
+  /// What in the portal caused this, for the log and for the deep link.
+  sourceType String? @db.VarChar(32)
+  sourceId   String?
+
+  /// Null for anything the portal generated on a schedule.
+  createdById String?
+  /// Unique per logical message. See the note above.
+  dedupeKey   String? @unique @db.VarChar(190)
+
+  attempts  Int       @default(0)
+  /// Not before this instant: the backoff between retries, and how "send at
+  /// 07:00" is expressed for a reminder queued the night before.
+  notBefore DateTime  @default(now())
+  sentAt    DateTime?
+  lastError String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department Department?  @relation(fields: [departmentId], references: [id])
+  target     TeamsTarget? @relation(fields: [targetId], references: [id])
+  recipient  User?        @relation("NotificationRecipient", fields: [recipientUserId], references: [id])
+  createdBy  User?        @relation("NotificationCreatedBy", fields: [createdById], references: [id])
+
+  @@index([status, notBefore])
+  @@index([departmentId])
+  @@index([recipientUserId])
+  @@index([targetId])
+  @@index([createdById])
+  @@index([createdAt])
+  @@map("notification_jobs")
 }

@@ -15,7 +15,7 @@ npm run test:e2e
 
 ---
 
-## Unit suite — 72 tests, all passing
+## Unit suite — 126 tests, all passing
 
 `npm test`
 
@@ -27,10 +27,28 @@ Every tier against every action, including the cases most likely to leak:
 - a T1 Member editing a task assigned to somebody else → denied
 - a T1 Member approving their **own** work → denied
 - a T2 Head broadcasting an all-staff announcement → denied
+- a T2 Head sending a Teams notification to another department → denied
+- a T2 Head touching a Teams webhook URL → denied
+- a T1 Member or advisor sending any notification → denied
 - an alumni account with a T3 tier attempting any write → denied
 - an advisor creating, editing, assigning or deleting → denied
 - advisors reading interview scores and performance notes (D1) → denied
 - a signed-out visitor doing anything at all → denied
+
+### Teams notifications (`tests/teams.test.ts`)
+
+The parts that would fail quietly, checked without a network:
+
+- the webhook host allowlist — an SSRF control, so it gets the awkward cases:
+  the cloud metadata address, `logic.azure.com.evil.example` (a host that merely
+  *contains* an allowed one), plain http on an allowed host, a URL carrying
+  credentials, and `javascript:` / `data:` / `file:`
+- a message body containing `<at>Head of Graphics</at>` produces no mention
+  entity, so text cannot forge a ping
+- a display name of `</at><at>Someone Else` cannot close the mention tag early
+- only `http(s)` URLs become a card button
+- `08:00` on a run sheet is 01:00 UTC, not 08:00 UTC — seven hours wrong would
+  send every event reminder in the middle of the night
 
 ### Link safety and rendering (`tests/export.test.ts`)
 

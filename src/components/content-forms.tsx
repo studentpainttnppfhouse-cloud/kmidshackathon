@@ -251,6 +251,11 @@ export function AnnouncementForm({
         Pin to the top
       </label>
 
+      <label className="flex items-center gap-2 text-sm text-muted">
+        <input type="checkbox" name="toTeams" className="accent-pink-500" />
+        Also push this to Teams
+      </label>
+
       <DraftKeeper formKey="announcement:new" />
       <Feedback state={state} />
       <SubmitButton className="hs-btn hs-btn-primary" pendingLabel="Posting…">

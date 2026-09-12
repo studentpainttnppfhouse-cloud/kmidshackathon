@@ -171,6 +171,46 @@ writes stay plaintext and log a warning once: a local checkout must still run,
 and silently storing something the deployment cannot decrypt is worse than
 storing it in the clear knowingly.
 
+Teams webhook URLs go through the same encryption. A webhook URL *is* a
+credential: anybody holding one can post into a staff channel as the portal,
+indefinitely, with no further check. It is never rendered back to a browser —
+the admin screen shows the host and the last four characters — and never written
+into the audit trail.
+
+## Outbound requests
+
+The Teams integration is the one place the server fetches a URL a person typed
+in, which makes it the one place SSRF is possible. Every other link in the
+portal is rendered for a browser to follow and is covered by `isSafeUrl()`.
+
+A webhook URL is therefore allowlisted by host suffix rather than filtered for
+badness (`src/lib/teams/config.ts`): `webhook.office.com` and `logic.azure.com`,
+plus whatever `TEAMS_WEBHOOK_HOSTS` adds for a sovereign cloud. That setting can
+only add, so a stray value cannot replace the list with something permissive. An
+admin who pastes `http://169.254.169.254/latest/meta-data/` — by mistake, or
+because somebody told them it was the new Teams URL — is refused.
+
+Three further properties, each closing a way around the allowlist:
+
+- **https only.** A webhook URL travels in the request; plain HTTP would put a
+  credential on the wire.
+- **Redirects are an error, not a hop.** The allowlist checks the URL the portal
+  chose. `redirect: "error"` is what stops the far end choosing the next one.
+- **Checked twice** — once in the form for a readable error, once inside the
+  sender, so a row written before the check existed is still refused.
+
+Message bodies are stripped of angle brackets before they reach an Adaptive
+Card, so text a person typed cannot forge an `<at>` mention and make the portal
+appear to have pinged somebody it did not. Display names are stripped the same
+way, so a profile field cannot close the mention tag early. Both are tested.
+
+The dispatcher (`/api/teams/dispatch`) is an HTTP endpoint because Render's free
+plan has no cron, so a shared bearer secret is the whole of its authentication.
+It is compared in constant time, an absent secret disables the route entirely
+rather than leaving it open, and a wrong secret and a missing one get the same
+response — a 401 that distinguishes them tells somebody probing that they have
+found a real endpoint worth guessing at.
+
 ## Uploads
 
 Files are stored in the database, never on disk. There is no uploads directory,
@@ -264,7 +304,15 @@ one:
    and short-lived; hashing them would make the panel unable to show them.
 5. **No email means no notification of a password change** to its owner. An
    admin-issued reset is a deliberate, in-person act.
-6. **PDF export is Latin-only.** Base-14 PDF fonts are WinAnsi-encoded, so Thai
+6. **A Teams webhook URL cannot be un-leaked by the portal.** It is encrypted
+   at rest and never displayed, but the person who pasted it in had it in their
+   clipboard, and revoking one means deleting the webhook in Teams — which the
+   portal cannot do on your behalf.
+7. **Notifications are queued, not instant.** A message goes out on the next
+   dispatch run, not the moment it is written. That is the right trade for a
+   moved deadline and the wrong one for a fire alarm; the composer says so
+   rather than implying otherwise.
+8. **PDF export is Latin-only.** Base-14 PDF fonts are WinAnsi-encoded, so Thai
    text is dropped from a PDF rather than mangled. `.docx` and `.md` are
    Unicode and carry it correctly; the export page says so at the point of
    choosing.
