@@ -67,6 +67,13 @@ export const RULES = {
   code: { limit: 10, windowMs: 10 * 60 * 1000, blockMs: 30 * 60 * 1000 },
   write: { limit: 60, windowMs: 60 * 1000, blockMs: 60 * 1000 },
   search: { limit: 90, windowMs: 60 * 1000, blockMs: 30 * 1000 },
+  /**
+   * Sending to Teams. Much tighter than `write`, because the unit of damage is
+   * different: a mistyped document costs one person a correction, a mistyped
+   * broadcast costs sixty people a notification each. Twelve in ten minutes is
+   * far more than a head will ever need and far less than a loop would send.
+   */
+  notify: { limit: 12, windowMs: 10 * 60 * 1000, blockMs: 10 * 60 * 1000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export function rateLimit(key: string, rule: RateLimitRule): RateLimitResult {

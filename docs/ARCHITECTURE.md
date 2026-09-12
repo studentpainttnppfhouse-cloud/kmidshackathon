@@ -161,6 +161,41 @@ QR codes are rendered server-side as a single inline SVG `<path>` (see
 `src/lib/qr.ts`). No canvas, no image request, no client bundle, and nothing
 for the Content-Security-Policy to make an exception for.
 
+## Teams: a queue, not a fetch inside the click
+
+A Server Action that posts to Teams while the person waits ties the success of
+their click to a third party being up. Teams times out, the action throws, and
+the announcement they just wrote is gone along with the delivery.
+
+So nothing in the portal talks to Microsoft inline. The write commits, a row
+lands in `notification_jobs`, and the action returns. `/api/teams/dispatch` —
+called on a schedule — does the talking, and a failure becomes a row with an
+error on it that an admin can read and retry, rather than a stack trace nobody
+saw.
+
+The cost is honest: a message goes out on the next dispatch run, not the instant
+it is written. Right for a moved deadline, wrong for a fire alarm, and the
+composer says which it is rather than implying anything is instant.
+
+Two properties make the schedule free to be as frequent as it likes:
+
+- **Reminders dedupe on a key that includes the Bangkok date**, so a task due
+  Friday produces one reminder on Thursday and one on Friday however often the
+  dispatcher wakes. It is a unique index, so the second attempt is dropped by
+  the database rather than by a read-then-write two runs could interleave
+  inside.
+- **Each job is claimed with a conditional update** that also pushes its retry
+  time out by a lease. Two overlapping runs cannot both send the same message,
+  and a run that dies halfway — a Render restart mid-request — leaves its job to
+  be retried in five minutes rather than stuck in a "sending" state nothing ever
+  clears.
+
+The dispatcher is an HTTP endpoint rather than a worker because Render's free
+plan has neither cron nor background workers, and every free scheduler that
+exists can do exactly one thing: make a request. It accepts `GET` as well as
+`POST` for the same reason, and is guarded by a bearer secret rather than by its
+method.
+
 ## Documents: both, and the author picks
 
 The original decision (D3-A) was metadata here, bodies in Google Docs — the

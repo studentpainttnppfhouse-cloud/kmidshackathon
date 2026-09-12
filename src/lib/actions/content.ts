@@ -18,6 +18,7 @@ import {
   safeFileName,
   safeMimeType,
 } from "@/lib/attachments";
+import { notifyAnnouncement } from "@/lib/teams/notify";
 import type { FormState } from "@/lib/actions/auth";
 import type { DocStatus } from "@prisma/client";
 
@@ -543,6 +544,7 @@ const announcementSchema = z.object({
   scope: z.enum(["all", "department"]),
   departmentId: z.string().optional().or(z.literal("")),
   pinned: z.coerce.boolean().optional(),
+  toTeams: z.coerce.boolean().optional(),
 });
 
 export async function createAnnouncement(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -556,6 +558,7 @@ export async function createAnnouncement(_prev: FormState, formData: FormData): 
     scope: formData.get("scope") ?? "department",
     departmentId: formData.get("departmentId") ?? "",
     pinned: formData.get("pinned") === "on",
+    toTeams: formData.get("toTeams") === "on",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
@@ -584,8 +587,25 @@ export async function createAnnouncement(_prev: FormState, formData: FormData): 
   });
 
   await audit(viewer.id, "announcement.created", { type: "announcement", id: created.id });
+
+  // Queued after the announcement is safely written, never before: the portal
+  // is the record and Teams is the courtesy. `notifyAnnouncement` swallows its
+  // own failures for the same reason — a Microsoft outage must not turn a
+  // posted announcement into a form error.
+  await notifyAnnouncement({
+    announcementId: created.id,
+    title: d.title,
+    body: d.body,
+    departmentId,
+    authorId: viewer.id,
+    authorName: viewer.nickname ?? viewer.name,
+    pinned: Boolean(d.pinned),
+    force: Boolean(d.toTeams),
+  });
+
   revalidatePath("/announcements");
   revalidatePath("/dashboard");
+  revalidatePath("/notifications");
   redirect("/announcements");
 }
 
