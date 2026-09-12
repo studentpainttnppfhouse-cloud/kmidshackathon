@@ -1,0 +1,79 @@
+name: Dispatch Teams notifications
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: teams-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Drain the portal notification queue
+        env:
+          TEAMS_DISPATCH_SECRET: ${{ secrets.TEAMS_DISPATCH_SECRET }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          secret = os.environ.get('TEAMS_DISPATCH_SECRET', '').strip()
+          if len(secret) < 16:
+              sys.exit('::error::TEAMS_DISPATCH_SECRET is missing or too short.')
+
+          # Refuse redirects so the bearer secret stays at this exact endpoint.
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          opener = urllib.request.build_opener(NoRedirect)
+          endpoint = 'https://kmidshackathonportal.onrender.com/api/teams/dispatch'
+          unhealthy = False
+          for batch in range(1, 6):
+              request = urllib.request.Request(
+                  endpoint, data=b'', method='POST',
+                  headers={'Authorization': 'Bearer ' + secret, 'Accept': 'application/json'},
+              )
+              try:
+                  with opener.open(request, timeout=300) as response:
+                      if response.status != 200:
+                          sys.exit('::error::Dispatcher returned a non-200 response.')
+                      report = json.load(response)
+              except urllib.error.HTTPError as error:
+                  sys.exit(f'::error::Dispatcher HTTP {error.code}. Check Render configuration.')
+              except Exception as error:
+                  sys.exit(f'::error::Dispatcher request failed ({type(error).__name__}).')
+
+              counts = ('queuedFromScans', 'claimed', 'sent', 'failed', 'retrying')
+              if (not isinstance(report, dict)
+                  or report.get('status') not in ('ok', 'degraded')
+                  or type(report.get('more')) is not bool
+                  or any(type(report.get(key)) is not int or report[key] < 0 for key in counts)):
+                  sys.exit('::error::Unexpected dispatcher response.')
+
+              # Log only delivery counts, never message contents or credentials.
+              summary = f'Batch {batch}: status={report["status"]}; ' + ', '.join(
+                  f'{key}={report[key]}' for key in counts)
+              print(summary)
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary_file:
+                  summary_file.write(summary + '\n\n')
+              unhealthy |= report['status'] != 'ok' or report['failed'] > 0 or report['retrying'] > 0
+              if not report['more']:
+                  break
+          else:
+              sys.exit('::error::Five batches completed; a backlog remains for the next run.')
+
+          if unhealthy:
+              sys.exit('::error::Delivery or scan problems occurred. Check the portal delivery log.')
+          PY
