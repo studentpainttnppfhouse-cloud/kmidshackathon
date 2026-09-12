@@ -79,9 +79,14 @@ export default async function AdminPage() {
         title="Accounts, invites & access"
         action={
           owner ? (
-            <Link href="/people/import" className="hs-btn hs-btn-primary">
-              <span aria-hidden="true">＋</span> Import people
-            </Link>
+            <>
+              <Link href="/admin/access" className="hs-btn hs-btn-secondary">
+                Page access
+              </Link>
+              <Link href="/people/import" className="hs-btn hs-btn-primary">
+                <span aria-hidden="true">＋</span> Import people
+              </Link>
+            </>
           ) : null
         }
       />

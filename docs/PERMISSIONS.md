@@ -35,15 +35,15 @@ event.
 | Team | Seats | Roles → tier |
 | --- | --- | --- |
 | Management | 3 | Event Director → T4 · Deputy Director → T3 · Timeline/Ops Manager → T3 |
-| Marketing | 3 | Marketing Head → T2 · Marketing → T1 |
-| Accounting | 1 | Accounting Head → T2 · Accounting → T1 |
+| Marketing | 4 | Marketing Head → T2 · Marketing → T1 |
+| Accounting | 2 | Accounting Head → T2 · Accounting → T1 |
 | Sponsors & Partnerships | 3 | Sponsorship Head → T2 · Partnership Liaison → T1 |
 | Graphics | 5 | Graphics Head → T2 · Graphic Designer → T1 |
 | Judging Coordination | 3 | Judging Head → T2 · Judging Coordinator → T1 |
-| MCs | 3 | MC → T1 |
-| Documentation, Rubric & Registration | 4 | Documentation Head → T2 · Documentation & Rubric → T1 · Registration → T1 |
-| Social Media | 3 | Social Media Head → T2 · Social Media → T1 |
-| Floaters | 3 | Floater → T1 |
+| MCs | 3 | Lead MC → T2 · MC → T1 |
+| Documentation, Rubric & Registration | 5 | Documentation Head → T2 · Documentation & Rubric → T1 · Registration → T1 |
+| Social Media | 5 | Social Media Head → T2 · Social Media → T1 |
+| Floaters | 3 | Floater Lead → T2 · Floater → T1 |
 | Advisors | — | Advisor → T0 |
 
 The tier a role implies is a **suggestion the admin can override**, and it is
@@ -61,6 +61,50 @@ Not tiers — toggles on a user, set from Admin.
 | `isMentor` | D-Day mentor. |
 | `isAlumni` | **Read-only, whatever the tier says.** For 2026 members kept for reference. |
 | `isActive` | Off = suspended. No sign-in, and existing sessions stop resolving. |
+
+## The page grid
+
+The table above is the shape of the work and does not change from season to
+season: a head approves inside their own team, a member edits their own task.
+Which teams get to *see* the audit log or the accounts screen is a different
+question, and it belongs to the owner rather than to a deployment.
+
+`src/lib/pages.ts` lists every page in the portal. For each one the owner sets a
+level per tier, from **Admin → Page access** for the whole grid at once, or from
+the small **Access** strip at the top of any page for that page alone. The strip
+renders for T4 only.
+
+| Level | What it means |
+| --- | --- |
+| **Hidden** | Not in the menu, and the URL redirects to the dashboard. |
+| **Read only** | Opens the page. Changes nothing, posts nothing. |
+| **Read & reply** | Opens the page, comments on threads, and answers forms. |
+| **Full** | Whatever that tier's role already allows here. |
+
+Three properties hold, and they are what make the grid safe to hand to somebody
+who is not a developer:
+
+1. **It only narrows.** Full is the absence of an extra restriction, not a
+   grant. A member given Full on Announcements still cannot broadcast, because
+   that was never theirs. So a wrong cell is a page somebody cannot reach, never
+   a permission somebody should not have.
+2. **The defaults are the portal as it was.** An untouched grid behaves exactly
+   like the portal before the grid existed, which is why the `page_access` table
+   is empty until somebody changes something.
+3. **Some cells cannot be set.** The owner is pinned at Full everywhere, because
+   there is nobody above T4 to undo a mistake. Dashboard, My settings and Help
+   cannot go below Read only for anybody. Admin and the audit log cannot be
+   opened below T3 at all.
+
+Enforcement is in the same place as everything else. `getViewer()` resolves the
+signed-in person's row of the grid and hangs it on the viewer; `can()` consults
+it before any rule below gets a say, so a server action called directly lands on
+the same answer the navigation gave. The app shell checks the path once for the
+whole tree, which is why hiding Documents also hides `/documents/abc/edit`.
+
+Only T4 may edit the grid. An admin who could would be one click from granting
+themselves the audit log and the accounts screen, and the difference between T3
+and T4 would stop meaning anything.
 
 ## What each tier can do
 
@@ -84,7 +128,7 @@ Read as: *can this person do X to a resource in **their own** department?*
 | Add or remove a Teams webhook URL | — | — | — | ✅ | ✅ |
 | Read the Teams delivery log | — | — | ✅ | ✅ | ✅ |
 | Read the incident log | — | — | — | ✅ | ✅ |
-| Read the audit log | — | — | — | ✅ | ✅ |
+| Read the audit log | — | — | — | ⚙️ | ✅ |
 | Interview scores, performance notes | — | — | — | ✅ | ✅ |
 | Move people between departments | — | — | — | ✅ | ✅ |
 | Invites, tiers, password resets | — | — | — | — | ✅ |
@@ -93,6 +137,11 @@ Read as: *can this person do X to a resource in **their own** department?*
 
 ¹ Advisors may approve documents and assignments — that is the one write-shaped
 thing they can do — but nothing else.
+
+⚙️ Off by default, and switchable. T3 could always reach the audit log by URL
+even though the sidebar only ever offered it to T4; the page grid closes that
+gap by shipping the log at Hidden for T3, and an owner opens it per tier from
+Admin → Page access. T2 and below cannot be let in at all.
 
 ² For their own department only. The portal-wide defaults, which speak for every
 department at once, are T3. So is the webhook URL: a head *uses* the channel
@@ -115,7 +164,7 @@ sit behind `view_private_notes`, which requires T3. It is tested explicitly.
 npm test
 ```
 
-23 cases covering every tier against every action, plus the boundaries that
+Cases covering every tier against every action, plus the boundaries that
 matter: cross-department writes, members approving their own work, heads
 broadcasting to all staff, alumni write attempts, and signed-out access. When a
 rule changes, the test changes with it — that is the point of keeping the policy
@@ -133,6 +182,7 @@ is a caller:
 | --- | --- |
 | `requireViewer()` | signed in, or redirect to `/login` |
 | `requireTier(tier)` | at least this tier, or bounce with `?denied=1` |
+| `requirePageAccess(page, level)` | the page grid lets this tier this far in, or bounce with `?denied=page` |
 | `assertCan(...)` | throws in a server action, where a redirect would be swallowed |
 | `can(...)` | the plain predicate — used by pages to filter lists and hide controls |
 

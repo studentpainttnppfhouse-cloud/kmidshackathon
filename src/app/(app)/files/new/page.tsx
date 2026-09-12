@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireViewer, can } from "@/lib/authorize";
+import { requirePageAccess, can } from "@/lib/authorize";
 import { FileForm } from "@/components/content-forms";
 import { Banner, PageHeader } from "@/components/ui";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachments";
@@ -10,7 +10,8 @@ export const metadata: Metadata = { title: "Add an asset" };
 export const dynamic = "force-dynamic";
 
 export default async function NewFilePage() {
-  const viewer = await requireViewer();
+  // A composer, not a page: a tier held at Read on files never reaches it.
+  const viewer = await requirePageAccess("files", "edit");
 
   const departments = await db.department.findMany({ orderBy: { sortOrder: "asc" } });
   const creatable = departments.filter((d) =>

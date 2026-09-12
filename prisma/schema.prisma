@@ -900,3 +900,47 @@ model NotificationJob {
   @@index([createdAt])
   @@map("notification_jobs")
 }
+
+// ---------------------------------------------------------------------------
+// Page access — what each tier may do with each page of the portal
+// ---------------------------------------------------------------------------
+
+/// How far into a page a tier is allowed to go.
+///
+/// The four levels are cumulative and deliberately coarse. A finer grid would
+/// be a second permission system running alongside `policy.ts`, and two systems
+/// that both decide the same question is how a portal ends up letting somebody
+/// into the audit log by accident.
+enum PageAccessLevel {
+  /// Gone. Not in the navigation, and the URL redirects.
+  NONE
+  /// Opens, reads, changes nothing.
+  READ
+  /// Reads, comments on threads, and answers forms. Still changes nothing else.
+  COMMENT
+  /// Whatever the tier's role already allows on that page.
+  EDIT
+}
+
+/// One cell of the page-by-tier grid the owner edits.
+///
+/// Absent rows are not "no access" — they mean nobody has touched that cell, so
+/// the built-in default in `src/lib/pages.ts` stands. That is what keeps a fresh
+/// database and a five-year-old one behaving identically, and it is why the
+/// table is written to only when somebody actually changes something.
+///
+/// This narrows `policy.ts`; it never widens it. A tier granted EDIT here can
+/// still only do what its role allows, so switching Announcements to EDIT for
+/// members does not turn members into broadcasters.
+model PageAccess {
+  /// A key from PORTAL_PAGES — "announcements", "audit", "files".
+  page  String          @db.VarChar(48)
+  tier  Tier
+  level PageAccessLevel
+
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@id([page, tier])
+  @@map("page_access")
+}

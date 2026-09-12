@@ -110,6 +110,11 @@ export function middleware(request: NextRequest): NextResponse {
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
+  // The path, forwarded so a Server Component can read it. Next gives a layout
+  // no way to ask which page is rendering inside it, and the app shell needs to
+  // know: it is where the owner's page grid is enforced, once, for every route
+  // underneath it rather than in thirty separate page files.
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
   // Next reads this back off the request to nonce its own script tags.
   requestHeaders.set("content-security-policy", csp);
 

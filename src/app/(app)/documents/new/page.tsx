@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireViewer, can } from "@/lib/authorize";
+import { requirePageAccess, can } from "@/lib/authorize";
 import { DocumentEditor } from "@/components/document-editor";
 import { PageHeader } from "@/components/ui";
 
@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
  * form nobody scrolls to, and one that reflows the whole page when it opens.
  */
 export default async function NewDocumentPage() {
-  const viewer = await requireViewer();
+  // A composer, not a page: a tier held at Read on documents never reaches it.
+  const viewer = await requirePageAccess("documents", "edit");
 
   const [departments, assignments] = await Promise.all([
     db.department.findMany({ orderBy: { sortOrder: "asc" } }),

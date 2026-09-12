@@ -178,10 +178,22 @@ test("account management, sessions, export and archive are owner-only", () => {
   }
 });
 
-test("the audit log is T3 and above", () => {
-  assert.equal(can(admin, "view_audit", { kind: "system" }), true);
+test("the audit log is the owner's by default, and T3's only if the owner says so", () => {
+  // The action itself is T3-and-above, as it always was. What changed is that
+  // the page grid ships with the audit log closed below T4 — which is where the
+  // sidebar already drew the line — so an admin has to be let in on purpose.
+  assert.equal(can(owner, "view_audit", { kind: "system" }), true);
+  assert.equal(can(admin, "view_audit", { kind: "system" }), false);
   assert.equal(can(head, "view_audit", { kind: "system" }), false);
   assert.equal(can(advisor, "view_audit", { kind: "system" }), false);
+
+  const openedUp = user("T3_ADMIN", { pageGrants: { audit: "READ" } });
+  assert.equal(can(openedUp, "view_audit", { kind: "system" }), true);
+
+  // No grant reaches below the page's floor: a head handed the audit log in the
+  // grid is still a head.
+  const notAllowed = user("T2_HEAD", { pageGrants: { audit: "EDIT" } });
+  assert.equal(can(notAllowed, "view_audit", { kind: "system" }), false);
 });
 
 // --- announcements ----------------------------------------------------------

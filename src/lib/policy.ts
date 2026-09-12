@@ -1,8 +1,20 @@
 import { TIER_ORDER } from "@/lib/constants";
-import type { Department, Tier, User } from "@prisma/client";
+import { clampAccess, defaultAccess, type PageKey } from "@/lib/pages";
+import type { Department, PageAccessLevel, Tier, User } from "@prisma/client";
 
-/** A signed-in person, as every policy decision sees them. */
-export type Viewer = User & { department: Department | null };
+/**
+ * A signed-in person, as every policy decision sees them.
+ *
+ * `pageGrants` is the owner's page-by-tier grid, already resolved for this
+ * person's tier by `getViewer()`. It is optional so that a caller holding only
+ * a database row — a test, a background job, the notification dispatcher —
+ * still type-checks; when it is missing the built-in defaults apply, and those
+ * are the portal's behaviour before the grid existed.
+ */
+export type Viewer = User & {
+  department: Department | null;
+  pageGrants?: Partial<Record<PageKey, PageAccessLevel>>;
+};
 
 /**
  * The one permission module.
@@ -77,6 +89,105 @@ function headOf(user: Viewer, departmentId: string | null): boolean {
   return user.tier === "T2_HEAD" && departmentId !== null && user.departmentId === departmentId;
 }
 
+// ---------------------------------------------------------------------------
+// The page grid — the owner's layer, sitting on top of the rules above
+// ---------------------------------------------------------------------------
+
+/**
+ * Which page a kind of record lives on.
+ *
+ * Hiding Assignments has to stop a member from editing a task, not just from
+ * seeing the board — otherwise the grid is decoration and a server action is
+ * the way around it. Mapping each resource to its page is what makes the single
+ * check in `can()` cover every write in the codebase, because every write
+ * already goes through `can()`.
+ *
+ * `comment` and `system` map to nothing on purpose. A comment belongs to
+ * whatever it hangs off, so `addComment` checks the parent's own page, and
+ * `system` is the catch-all resource used by actions that are gated by the
+ * action map below instead.
+ */
+const PAGE_FOR_RESOURCE: Record<Resource["kind"], PageKey | null> = {
+  department: "departments",
+  assignment: "assignments",
+  document: "documents",
+  file: "files",
+  announcement: "announcements",
+  form: "forms",
+  user: "people",
+  private_notes: "people",
+  incident: "event",
+  notification: "notifications",
+  comment: null,
+  system: null,
+};
+
+/**
+ * Actions that only look at data.
+ *
+ * `view_audit` and `view_private_notes` read like verbs but are reads, so a
+ * page held at READ still permits them — the tier rules above are what decide
+ * whether this particular person may look.
+ */
+const READ_ACTIONS: ReadonlySet<Action> = new Set<Action>([
+  "read",
+  "view_audit",
+  "view_private_notes",
+]);
+
+/** Actions whose page is decided by what is being done, not what it is done to. */
+const PAGE_FOR_ACTION: Partial<Record<Action, PageKey>> = {
+  view_audit: "audit",
+  manage_users: "admin",
+  manage_sessions: "admin",
+  manage_departments: "departments",
+  manage_notifications: "notifications",
+  notify: "notifications",
+};
+
+/** What this person may do on this page: their grant, or the shipped default. */
+export function pageLevel(
+  user: {
+    tier: Tier;
+    pageGrants?: Partial<Record<PageKey, PageAccessLevel>>;
+  } | null,
+  key: PageKey,
+): PageAccessLevel {
+  if (!user) return "NONE";
+  const stored = user.pageGrants?.[key];
+  return clampAccess(key, user.tier, stored ?? defaultAccess(key, user.tier));
+}
+
+export function canSeePage(user: Viewer | null, key: PageKey): boolean {
+  return pageLevel(user, key) !== "NONE";
+}
+
+/** True when the page lets this person change things, role permitting. */
+export function canEditPage(user: Viewer | null, key: PageKey): boolean {
+  return pageLevel(user, key) === "EDIT";
+}
+
+/**
+ * The grid's verdict on one action, before the role rules get a say.
+ *
+ * Deliberately one-directional: this can only turn a yes into a no. EDIT
+ * abstains rather than granting, which is what makes a wrong cell in the grid a
+ * page somebody cannot reach instead of a permission somebody should not have.
+ */
+function allowedByPage(user: Viewer, action: Action, resource: Resource): boolean {
+  const key = PAGE_FOR_ACTION[action] ?? PAGE_FOR_RESOURCE[resource.kind];
+  if (!key) return true;
+
+  const level = pageLevel(user, key);
+  if (level === "EDIT") return true;
+  if (level === "NONE") return false;
+  if (READ_ACTIONS.has(action)) return true;
+  // READ stops at reading; COMMENT adds replying to a thread and answering a
+  // form, which are the two writes that are part of taking part rather than
+  // part of running the place.
+  return level === "COMMENT" && action === "comment";
+}
+
 export function can(user: Viewer | null, action: Action, resource: Resource): boolean {
   if (!user) return false;
   if (!user.isActive || user.deletedAt) return false;
@@ -84,6 +195,12 @@ export function can(user: Viewer | null, action: Action, resource: Resource): bo
   // Alumni and un-activated reserve staff are read-only, whatever their tier.
   const readOnly = user.isAlumni || (user.isReserve && !user.isActive);
   if (readOnly && action !== "read") return false;
+
+  // The owner's page grid, applied before anything else has a chance to say
+  // yes. It is checked here rather than in each page so that a server action
+  // called directly — the thing a hidden nav link does nothing about — lands on
+  // the same answer the navigation gave.
+  if (!allowedByPage(user, action, resource)) return false;
 
   // --- Owner-only actions -------------------------------------------------
   if (

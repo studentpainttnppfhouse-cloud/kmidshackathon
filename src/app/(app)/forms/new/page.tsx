@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireViewer, can } from "@/lib/authorize";
+import { requirePageAccess, can } from "@/lib/authorize";
 import { FormBuilder } from "@/components/form-builder";
 import { FormRecordForm } from "@/components/content-forms";
 import { Card, PageHeader, SectionTitle } from "@/components/ui";
@@ -14,7 +14,8 @@ export default async function NewFormPage({
 }: {
   searchParams: Promise<{ kind?: string }>;
 }) {
-  const viewer = await requireViewer();
+  // A composer, not a page: a tier held at Read on forms never reaches it.
+  const viewer = await requirePageAccess("forms", "edit");
   const { kind } = await searchParams;
   const external = kind === "external";
 

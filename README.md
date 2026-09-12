@@ -196,7 +196,7 @@ npm run dev
 | Join links & QR codes — one code a whole room scans, with a printable poster | Done |
 | Dashboard — per tier, with the countdown to 20 March 2027 | Done |
 | Assignments — board, list, calendar, my tasks, comments, approvals | Done |
-| Department workspaces ×6 plus General | Done |
+| Department workspaces ×10 plus General and Advisors | Done |
 | People directory and org chart | Done |
 | Documents — written in the portal *or* linked from Drive | Done |
 | Document export — `.docx`, `.pdf`, Markdown, no dependencies | Done |
@@ -209,6 +209,7 @@ npm run dev
 | Site-wide search across everything you may read | Done |
 | Event-day mode — run sheet, check-in, incident log; hideable until needed | Done |
 | Admin — accounts, tiers, invites, bulk import, resets, sessions, audit, export | Done |
+| Page access — the owner sets what each tier may see and change, page by page | Done |
 | Microsoft Teams notifications — deadlines, announcements and urgent pushes, head/admin controlled | Done |
 | Dark mode, print stylesheet, loading states, keyboard and screen-reader paths | Done |
 | Social Media Command Center | Phase 3 — schema is in place |
@@ -290,6 +291,7 @@ link, the owner, the deadline and where the responses land.
   the limits stated plainly
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it is built, and the
   decisions that shaped it
-- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) — the tier model, action by action
+- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) — the tier model action by action,
+  and the page grid the owner sets on top of it
 - [`docs/TESTING.md`](docs/TESTING.md) — what is verified and how to re-run it
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — running it, backups, event day

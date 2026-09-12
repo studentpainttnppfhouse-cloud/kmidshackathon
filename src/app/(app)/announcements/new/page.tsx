@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireViewer, can } from "@/lib/authorize";
+import { requirePageAccess, can } from "@/lib/authorize";
 import { AnnouncementForm } from "@/components/content-forms";
 import { PageHeader } from "@/components/ui";
 
@@ -9,7 +9,8 @@ export const metadata: Metadata = { title: "New announcement" };
 export const dynamic = "force-dynamic";
 
 export default async function NewAnnouncementPage() {
-  const viewer = await requireViewer();
+  // A composer, not a page: a tier held at Read on announcements never reaches it.
+  const viewer = await requirePageAccess("announcements", "edit");
   const departments = await db.department.findMany({ orderBy: { sortOrder: "asc" } });
 
   const canBroadcast = can(viewer, "create", {
