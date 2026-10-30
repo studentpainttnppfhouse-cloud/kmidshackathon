@@ -38,7 +38,7 @@ jobs:
                   return None
 
           opener = urllib.request.build_opener(NoRedirect)
-          endpoint = 'https://kmidshackathonportal.onrender.com/api/teams/dispatch'
+          endpoint = 'https://kmidshackathonportal.vercel.app/api/teams/dispatch'
           unhealthy = False
           for batch in range(1, 6):
               request = urllib.request.Request(
@@ -51,7 +51,7 @@ jobs:
                           sys.exit('::error::Dispatcher returned a non-200 response.')
                       report = json.load(response)
               except urllib.error.HTTPError as error:
-                  sys.exit(f'::error::Dispatcher HTTP {error.code}. Check Render configuration.')
+                  sys.exit(f'::error::Dispatcher HTTP {error.code}. Check Vercel configuration.')
               except Exception as error:
                   sys.exit(f'::error::Dispatcher request failed ({type(error).__name__}).')
 
