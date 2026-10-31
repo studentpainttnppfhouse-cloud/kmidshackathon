@@ -1882,29 +1882,53 @@ body[data-cookie-notice="1"] {
   }
 }
 
-/* Staff workspace: quieter surfaces and consistent controls for daily work.
-   Public event and sign-in pages keep their own expressive brand treatment. */
+/* The working area shares the illustrated pink identity of staff sign-in,
+   while keeping daily navigation and task layouts compact. */
 .hs-workspace {
-  --hs-bg: #f6f7f9;
-  --hs-line: #e2e5ea;
-  --hs-line-soft: #edf0f3;
   min-height: 100dvh;
   background: var(--hs-bg);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
 }
-[data-theme="dark"] .hs-workspace {
-  --hs-bg: #19171c;
-  --hs-line: #403842;
-  --hs-line-soft: #322c35;
-}
-.hs-workspace .hs-card { min-width: 0; border-width: 1px; border-radius: 12px; }
+.hs-workspace .hs-card { min-width: 0; border-width: 1px; border-radius: 16px; }
 .hs-workspace .grid > * { min-width: 0; }
-.hs-workspace .hs-card-dashed { border: 0; border-radius: 8px; padding: 1.25rem; }
-.hs-workspace .hs-btn { border-radius: 8px; min-height: 44px; }
-.hs-workspace .hs-h1 { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
-.hs-workspace .hs-em { font-family: inherit; font-style: normal; font-size: 1em; font-weight: inherit; letter-spacing: inherit; color: inherit; }
-.hs-workspace .hs-eyebrow { font-family: inherit; font-style: normal; font-size: .875rem; }
+.hs-workspace .hs-card-dashed { border: 0; border-radius: 12px; padding: 1.25rem; }
+.hs-workspace .hs-btn { border-radius: var(--radius-pill); min-height: 44px; }
+.hs-workspace .hs-h1 { font-size: 1.75rem; font-weight: 800; line-height: 1.2; }
 .hs-workspace h1, .hs-workspace h2, .hs-workspace h3 { overflow-wrap: anywhere; }
+.hs-workspace .hs-page-heading {
+  --sticker-ink: #2a0d1c;
+  --sticker-fill: #c782a5;
+  --sticker-alt: #e193b9;
+  --sticker-paper: #f3c0dc;
+  --sticker-wash: #d58baf;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 1.5rem 6rem 2rem 1.5rem;
+  border-radius: 20px 20px 0 0;
+  background: #edacd0;
+  color: #2a0d1c;
+}
+.hs-workspace .hs-page-heading .hs-h1,
+.hs-workspace .hs-page-heading .hs-em,
+.hs-workspace .hs-page-heading .hs-eyebrow,
+.hs-workspace .hs-page-heading .text-muted { color: #2a0d1c; }
+.hs-workspace .hs-page-heading .hs-btn { border-color: #2a0d1c; color: #2a0d1c; background: transparent; }
+.hs-workspace .hs-page-heading .hs-btn-primary { color: #fff; background: #2a0d1c; }
+.hs-heading-sticker { display: none; }
+.hs-workspace .hs-heading-sticker { display: block; position: absolute; top: 1.5rem; right: 1rem; width: 3.75rem; pointer-events: none; }
+.hs-workspace .hs-page-heading::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 12px;
+  background: radial-gradient(circle at 12px 0, transparent 12px, var(--hs-bg) 12.5px) 0 0 / 24px 12px repeat-x;
+}
+@media (min-width: 640px) {
+  .hs-workspace .hs-page-heading { padding: 1.75rem 7rem 2.25rem 1.75rem; }
+  .hs-workspace .hs-heading-sticker { right: 1.5rem; width: 4.5rem; }
+}
+@media print { .hs-workspace .hs-page-heading { background: white; padding: 0; } .hs-heading-sticker, .hs-workspace .hs-page-heading::after { display: none; } }
 .hs-nav-link {
   display: flex;
   min-height: 44px;
