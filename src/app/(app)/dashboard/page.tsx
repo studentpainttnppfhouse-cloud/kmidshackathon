@@ -6,7 +6,7 @@ import { EVENT_START } from "@/lib/constants";
 import { endOfWeek, timeAgo } from "@/lib/dates";
 import { Countdown } from "@/components/countdown";
 import { AssignmentRow, type AssignmentSummary } from "@/components/assignment-row";
-import { Avatar, Banner, Card, EmptyState, ProgressBar, SectionTitle, Stat } from "@/components/ui";
+import { Avatar, Banner, Card, EmptyState, ProgressBar, SectionTitle, Stat, PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -114,22 +114,21 @@ export default async function DashboardPage({
         </Banner>
       ) : null}
 
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="hs-h1">Hi, {greeting}</h1>
-          <p className="mt-2 text-sm text-muted">Your tasks, your team, and the latest staff updates.</p>
-        </div>
-        {canSeePage(viewer, "assignments") ? (
+      <PageHeader
+        eyebrow="Your workspace"
+        title={`Hi, ${greeting}`}
+        subtitle="Your tasks, your team, and the latest staff updates."
+        action={canSeePage(viewer, "assignments") ? (
           <Link href="/assignments?view=mine" className="hs-btn hs-btn-primary">View my tasks</Link>
         ) : null}
-      </header>
+      />
 
       <nav aria-label="Workspace shortcuts" className="flex flex-wrap gap-2">
         {viewer.department && canSeePage(viewer, "departments") ? (
           <Link href={`/departments/${viewer.department.slug}`} className="hs-btn hs-btn-ghost">My team · {viewer.department.name}</Link>
         ) : null}
-        {canSeePage(viewer, "documents") ? <Link href="/documents" className="hs-btn hs-btn-ghost">Shared documents</Link> : null}
-        {canSeePage(viewer, "people") ? <Link href="/people" className="hs-btn hs-btn-ghost">Find a staff member</Link> : null}
+        {canSeePage(viewer, "documents") ? <Link href="/documents" className="hs-btn hs-btn-ghost">Documents</Link> : null}
+        {canSeePage(viewer, "people") ? <Link href="/people" className="hs-btn hs-btn-ghost">Find people</Link> : null}
       </nav>
 
       <div className="grid gap-4 lg:grid-cols-3">

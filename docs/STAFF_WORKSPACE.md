@@ -1,6 +1,6 @@
 # Staff workspace
 
-The portal is designed for all staff on phones and laptops. Its shared navigation groups daily work, shared resources, and management tools. Phones keep Home, Tasks, Teams, and Updates directly available; the full menu uses a native dialog with focus containment, Escape dismissal, and focus return. Navigation continues to use the destinations allowed by the server.
+The portal is designed for all staff on phones and laptops. The working area carries the staff sign-in design: soft pink illustrated headings, heart stickers, scalloped dividers, pill buttons, and Poppins with Instrument Serif heading accents. Dense task content stays readable and responsive. Its shared navigation groups daily work, shared resources, and management tools. Phones keep Home, Tasks, Teams, and Updates directly available; the full menu uses a native dialog with focus containment, Escape dismissal, and focus return. Navigation continues to use the destinations allowed by the server.
 
 Home puts personal tasks and staff updates before statistics and the event countdown. Shortcuts lead to the staff member's department, shared documents, and people. Teams & departments puts the staff member's own team first. Each team workspace links directly to its tasks, updates, documents, files, and members.
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StickerHeartbeat } from "@/components/stickers";
 import type { CSSProperties, ReactNode } from "react";
 import { safeHref } from "@/lib/url";
 import {
@@ -62,7 +63,7 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="hs-enter flex flex-wrap items-end justify-between gap-3">
+    <header className="hs-page-heading flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
         <p className="hs-eyebrow">{eyebrow}</p>
         <h1 className="hs-h1">
@@ -72,7 +73,8 @@ export function PageHeader({
           <p className="mt-1.5 max-w-[65ch] text-sm text-muted [text-wrap:pretty]">{subtitle}</p>
         ) : null}
       </div>
-      {action ? <div className="flex shrink-0 flex-wrap gap-2">{action}</div> : null}
+      {action ? <div className="flex min-w-0 flex-wrap gap-2">{action}</div> : null}
+      <StickerHeartbeat tilt={12} className="hs-heading-sticker" />
     </header>
   );
 }

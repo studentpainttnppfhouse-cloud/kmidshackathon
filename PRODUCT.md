@@ -14,11 +14,11 @@ One shared workspace for assignments, department teams, documents, files and sta
 
 ## Brand Personality
 
-Clear, friendly, dependable. Keep the established pink Hackathon Studio identity.
+Clear, friendly, dependable. Keep the established pink Hackathon Studio identity, illustrated health stickers, scalloped edges, and mixed sans/serif page headings from staff sign-in.
 
 ## Anti-references
 
-Flat menus that give every tool equal priority, decorative dashboard heroes, hidden daily actions on phones, and management screens that overwhelm ordinary staff.
+Flat menus that give every tool equal priority, hidden daily actions on phones, and management screens that overwhelm ordinary staff.
 
 ## Design Principles
 
@@ -26,6 +26,7 @@ Flat menus that give every tool equal priority, decorative dashboard heroes, hid
 - Organize people and shared work around department teams, inspired by Microsoft Teams.
 - Keep frequent destinations directly available on phones and laptops.
 - Use plain labels and consistent controls.
+- Carry the illustrated sign-in identity into compact workspace headings; keep task content easy to scan.
 - Preserve server-enforced permissions and existing workflows.
 
 ## Accessibility & Inclusion

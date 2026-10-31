@@ -10,6 +10,7 @@ import {
   DocStatusPill,
   EmptyState,
   ProgressBar,
+  PageHeader,
   SectionTitle,
   Stat,
   TierPill,
@@ -92,19 +93,8 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
         ← All teams
       </Link>
 
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <span className="hs-eyebrow flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
-            Team workspace
-          </span>
-          <h1 className="hs-h1">{d.name}</h1>
-          {d.description ? <p className="mt-1 text-sm text-muted">{d.description}</p> : null}
-        </div>
-        <Link href={`/assignments?view=board&dept=${d.slug}`} className="hs-btn hs-btn-secondary">
-          Open task board
-        </Link>
-      </header>
+      <PageHeader eyebrow="Team workspace" title={d.name} subtitle={d.description}
+        action={<Link href={`/assignments?view=board&dept=${d.slug}`} className="hs-btn hs-btn-secondary">Open task board</Link>} />
 
       <nav aria-label="Team workspace sections" className="hs-team-sections">
         <a href="#team-tasks">Tasks</a>

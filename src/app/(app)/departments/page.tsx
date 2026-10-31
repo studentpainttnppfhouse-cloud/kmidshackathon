@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { requireViewer } from "@/lib/authorize";
-import { Avatar, ProgressBar } from "@/components/ui";
+import { Avatar, ProgressBar, PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Teams & departments" };
 export const dynamic = "force-dynamic";
@@ -35,10 +35,8 @@ export default async function DepartmentsPage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="hs-h1">Teams & departments</h1>
-        <p className="mt-2 text-sm text-muted">Open a team workspace for its tasks, updates, files, and people.</p>
-      </header>
+      <PageHeader eyebrow="Team workspaces" title="Teams & departments"
+        subtitle="Open a team workspace for its tasks, updates, files, and people." />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {ordered.map((d) => {
