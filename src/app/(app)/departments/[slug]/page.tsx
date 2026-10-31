@@ -38,7 +38,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
 
   if (!d) notFound();
 
-  const [assignments, documents, files, announcements] = await Promise.all([
+  const [assignments, documents, files, announcements, taskCounts, overdue] = await Promise.all([
     db.assignment.findMany({
       where: { departmentId: d.id, deletedAt: null },
       include: {
@@ -67,28 +67,36 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       take: 5,
     }),
+    db.assignment.groupBy({
+      by: ["status"],
+      where: { departmentId: d.id, deletedAt: null },
+      _count: { _all: true },
+    }),
+    db.assignment.count({
+      where: { departmentId: d.id, deletedAt: null, dueDate: { lt: new Date() }, status: { notIn: ["DONE", "APPROVED"] } },
+    }),
   ]);
 
   const assetHrefs = await assetLinks(files);
 
-  const done = assignments.filter((a) => a.status === "DONE" || a.status === "APPROVED").length;
-  const overdue = assignments.filter(
-    (a) => a.dueDate && a.dueDate.getTime() < Date.now() && a.status !== "DONE" && a.status !== "APPROVED",
-  ).length;
+  const totalTasks = taskCounts.reduce((sum, row) => sum + row._count._all, 0);
+  const done = taskCounts
+    .filter((row) => row.status === "DONE" || row.status === "APPROVED")
+    .reduce((sum, row) => sum + row._count._all, 0);
 
   const isMine = viewer.departmentId === d.id;
 
   return (
     <div className="space-y-5">
       <Link href="/departments" className="text-sm font-semibold text-brand-deep">
-        ← All departments
+        ← All teams
       </Link>
 
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <span className="hs-eyebrow flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
-            Department workspace
+            Team workspace
           </span>
           <h1 className="hs-h1">{d.name}</h1>
           {d.description ? <p className="mt-1 text-sm text-muted">{d.description}</p> : null}
@@ -98,6 +106,14 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
         </Link>
       </header>
 
+      <nav aria-label="Team workspace sections" className="hs-team-sections">
+        <a href="#team-tasks">Tasks</a>
+        <a href="#team-updates">Updates</a>
+        <a href="#team-documents">Documents</a>
+        <a href="#team-files">Files</a>
+        <a href="#team-members">Members</a>
+      </nav>
+
       {!isMine ? (
         <p className="rounded-xl bg-surface px-4 py-2.5 text-xs text-faint">
           You are viewing another department. Everything here is read-only for you.
@@ -106,20 +122,24 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="People" value={d.members.length} />
-        <Stat label="Tasks" value={assignments.length} />
+        <Stat label="Tasks" value={totalTasks} />
         <Stat label="Done" value={done} tone="ok" />
         <Stat label="Overdue" value={overdue} tone={overdue > 0 ? "danger" : "default"} />
       </div>
 
       <Card>
         <ProgressBar
-          value={assignments.length === 0 ? 0 : (done / assignments.length) * 100}
+          value={totalTasks === 0 ? 0 : (done / totalTasks) * 100}
           label="Department progress"
         />
       </Card>
 
+      {totalTasks > assignments.length ? (
+        <p className="text-sm text-muted">Showing {assignments.length} of {totalTasks} tasks. Open the task board to see all.</p>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card id="team-tasks">
           <SectionTitle
             action={
               <Link
@@ -144,7 +164,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
         </Card>
 
         <div className="space-y-4">
-          <Card>
+          <Card id="team-updates">
             <SectionTitle
               action={
                 <Link href="/announcements" className="text-sm font-semibold text-brand-deep">
@@ -174,7 +194,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
             )}
           </Card>
 
-          <Card>
+          <Card id="team-documents">
             <SectionTitle
               action={
                 <Link href="/documents" className="text-sm font-semibold text-brand-deep">
@@ -203,7 +223,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
             )}
           </Card>
 
-          <Card>
+          <Card id="team-files">
             <SectionTitle
               action={
                 <Link href="/files" className="text-sm font-semibold text-brand-deep">
@@ -245,7 +265,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
         </div>
       </div>
 
-      <Card>
+      <Card id="team-members">
         <SectionTitle>Members</SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {d.members.map((m) => (

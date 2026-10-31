@@ -27,7 +27,7 @@ export function AssignmentRow({ a, showDepartment = true }: { a: AssignmentSumma
         aria-hidden="true"
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-ink">{a.title}</span>
+        <span className="line-clamp-2 text-sm font-semibold text-ink sm:line-clamp-1">{a.title}</span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           {showDepartment ? <span className="text-faint">{a.department.name}</span> : null}
           <span className={overdue ? "font-semibold text-danger-strong" : "text-muted"}>

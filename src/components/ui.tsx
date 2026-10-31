@@ -12,11 +12,13 @@ import type { AssignmentStatus, DocStatus, Priority, Tier } from "@prisma/client
 export function Card({
   children,
   className = "",
+  id,
 }: {
   children: ReactNode;
   className?: string;
+  id?: string;
 }) {
-  return <div className={`hs-card p-5 ${className}`}>{children}</div>;
+  return <div id={id} className={`hs-card p-5 ${className}`}>{children}</div>;
 }
 
 export function SectionTitle({

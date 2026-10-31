@@ -1,12 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import { requireViewer, isAdmin } from "@/lib/authorize";
+import { requireViewer, isAdmin, canSeePage } from "@/lib/authorize";
 import { EVENT_START } from "@/lib/constants";
 import { endOfWeek, timeAgo } from "@/lib/dates";
 import { Countdown } from "@/components/countdown";
 import { AssignmentRow, type AssignmentSummary } from "@/components/assignment-row";
-import { Avatar, Banner, Card, EmptyState, ProgressBar, SectionTitle, Stat, ZineHeader } from "@/components/ui";
+import { Avatar, Banner, Card, EmptyState, ProgressBar, SectionTitle, Stat } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function DashboardPage({
   const admin = isAdmin(viewer);
   const deptId = viewer.departmentId;
 
-  const [myThisWeek, announcements, deptStats] = await Promise.all([
+  const [myThisWeek, announcements, deptStats, myOpenCount] = await Promise.all([
     db.assignment.findMany({
       where: {
         deletedAt: null,
@@ -60,6 +60,9 @@ export default async function DashboardPage({
         color: true,
         _count: { select: { assignments: { where: { deletedAt: null } } } },
       },
+    }),
+    db.assignment.count({
+      where: { deletedAt: null, assignees: { some: { userId: viewer.id } }, status: { notIn: ["DONE", "APPROVED"] } },
     }),
   ]);
 
@@ -111,37 +114,23 @@ export default async function DashboardPage({
         </Banner>
       ) : null}
 
-      <ZineHeader
-        eyebrow="Dashboard"
-        title={`Hi, ${greeting}`}
-        action={
-          <Link href="/assignments?view=mine" className="hs-btn hs-btn-secondary">
-            My tasks
-          </Link>
-        }
-      />
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="My open tasks" value={myThisWeek.length} href="/assignments?view=mine" />
-            <Stat
-              label="Overdue"
-              value={overdueCount}
-              tone={overdueCount > 0 ? "danger" : "ok"}
-              href="/assignments?view=list&status=overdue"
-            />
-            <Stat
-              label="Needs review"
-              value={needsReviewCount}
-              tone={needsReviewCount > 0 ? "warn" : "default"}
-              href="/assignments?view=board"
-            />
-            <Stat label="Tasks total" value={totalTasks} href="/assignments" />
-          </div>
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="hs-h1">Hi, {greeting}</h1>
+          <p className="mt-2 text-sm text-muted">Your tasks, your team, and the latest staff updates.</p>
         </div>
-        <Countdown targetIso={EVENT_START.toISOString()} />
-      </div>
+        {canSeePage(viewer, "assignments") ? (
+          <Link href="/assignments?view=mine" className="hs-btn hs-btn-primary">View my tasks</Link>
+        ) : null}
+      </header>
+
+      <nav aria-label="Workspace shortcuts" className="flex flex-wrap gap-2">
+        {viewer.department && canSeePage(viewer, "departments") ? (
+          <Link href={`/departments/${viewer.department.slug}`} className="hs-btn hs-btn-ghost">My team · {viewer.department.name}</Link>
+        ) : null}
+        {canSeePage(viewer, "documents") ? <Link href="/documents" className="hs-btn hs-btn-ghost">Shared documents</Link> : null}
+        {canSeePage(viewer, "people") ? <Link href="/people" className="hs-btn hs-btn-ghost">Find a staff member</Link> : null}
+      </nav>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -152,7 +141,7 @@ export default async function DashboardPage({
               </Link>
             }
           >
-            My assignments this week
+            My tasks this week
           </SectionTitle>
 
           {myThisWeek.length === 0 ? (
@@ -177,7 +166,7 @@ export default async function DashboardPage({
               </Link>
             }
           >
-            Announcements
+            Staff updates
           </SectionTitle>
 
           {announcements.length === 0 ? (
@@ -207,6 +196,28 @@ export default async function DashboardPage({
             </ul>
           )}
         </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="My open tasks" value={myOpenCount} href="/assignments?view=mine" />
+            <Stat
+              label="Overdue"
+              value={overdueCount}
+              tone={overdueCount > 0 ? "danger" : "ok"}
+              href="/assignments?view=list&status=overdue"
+            />
+            <Stat
+              label="Needs review"
+              value={needsReviewCount}
+              tone={needsReviewCount > 0 ? "warn" : "default"}
+              href="/assignments?view=board"
+            />
+            <Stat label="Tasks total" value={totalTasks} href="/assignments" />
+          </div>
+        </div>
+        <Countdown targetIso={EVENT_START.toISOString()} />
       </div>
 
       {admin || isHead ? (
