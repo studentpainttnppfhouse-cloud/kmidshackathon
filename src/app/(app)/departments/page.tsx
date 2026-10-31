@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requireViewer } from "@/lib/authorize";
 import { Avatar, ProgressBar } from "@/components/ui";
 
-export const metadata: Metadata = { title: "Departments" };
+export const metadata: Metadata = { title: "Teams & departments" };
 export const dynamic = "force-dynamic";
 
 export default async function DepartmentsPage() {
@@ -31,15 +31,17 @@ export default async function DepartmentsPage() {
   });
   const doneMap = new Map(done.map((d) => [d.departmentId, d._count._all]));
 
+  const ordered = [...departments].sort((a, b) => Number(b.id === viewer.departmentId) - Number(a.id === viewer.departmentId));
+
   return (
     <div className="space-y-5">
       <header>
-        <p className="hs-eyebrow">Workspaces</p>
-        <h1 className="hs-h1">Six departments, one shared view</h1>
+        <h1 className="hs-h1">Teams & departments</h1>
+        <p className="mt-2 text-sm text-muted">Open a team workspace for its tasks, updates, files, and people.</p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {departments.map((d) => {
+        {ordered.map((d) => {
           const total = d._count.assignments;
           const complete = doneMap.get(d.id) ?? 0;
           const mine = viewer.departmentId === d.id;
@@ -52,7 +54,7 @@ export default async function DepartmentsPage() {
                 mine ? "ring-1 ring-pink-200" : ""
               }`}
             >
-              <span className="mb-2 flex items-center gap-2">
+              <span className="mb-2 flex flex-wrap items-center gap-2">
                 <span
                   className="h-3 w-3 rounded-full"
                   style={{ background: d.color }}
@@ -60,7 +62,7 @@ export default async function DepartmentsPage() {
                 />
                 <span className="hs-h2">{d.name}</span>
                 {mine ? (
-                  <span className="hs-pill bg-tint-strong text-brand-deep">Yours</span>
+                  <span className="hs-pill bg-tint-strong text-brand-deep">My team</span>
                 ) : null}
               </span>
 
@@ -73,7 +75,7 @@ export default async function DepartmentsPage() {
                 label={`${complete}/${total} tasks done`}
               />
 
-              <span className="mt-3 flex items-center justify-between text-xs text-faint">
+              <span className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-faint">
                 <span>
                   {d._count.members} people · {d._count.documents} documents
                 </span>
@@ -88,7 +90,7 @@ export default async function DepartmentsPage() {
                     {d.head.nickname || d.head.name}
                   </span>
                 ) : (
-                  <span>No head</span>
+                  <span>Team lead not assigned</span>
                 )}
               </span>
             </Link>

@@ -328,7 +328,25 @@ test.describe("interface", () => {
     await toggle.click();
     await expect(page.locator("#hs-mobile-nav")).toBeVisible();
     await page.getByRole("button", { name: "Close menu" }).click();
-    await expect(page.locator("#hs-mobile-nav")).toHaveCount(0);
+    await expect(page.locator("#hs-mobile-nav")).not.toBeVisible();
+  });
+
+  test("phone navigation keeps daily work visible and the menu returns focus", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page);
+    const quick = page.getByRole("navigation", { name: "Quick access" });
+    await expect(quick.getByRole("link", { name: /^Home/ })).toBeVisible();
+    await expect(quick.getByRole("link", { name: /^Tasks/ })).toBeVisible();
+    await expect(quick.getByRole("link", { name: /^Teams/ })).toBeVisible();
+    const toggle = page.getByRole("button", { name: "Open menu" });
+    await toggle.click();
+    await expect(page.getByRole("dialog", { name: "Portal menu" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Portal menu" })).not.toBeVisible();
+    await expect(toggle).toBeFocused();
+    await quick.getByRole("link", { name: /^Tasks/ }).click();
+    await page.waitForURL(/\/assignments/);
+    await expect(quick.getByRole("link", { name: /^Tasks/ })).toHaveAttribute("aria-current", "page");
   });
 
   test("the page does not scroll sideways on a phone", async ({ page }) => {

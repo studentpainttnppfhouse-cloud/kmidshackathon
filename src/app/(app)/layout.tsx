@@ -50,14 +50,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const items: NavItem[] = (
     [
-      { key: "dashboard", href: "/dashboard", label: "Dashboard", badge: undefined },
+      { key: "dashboard", href: "/dashboard", label: "Home", badge: undefined },
       {
         key: "assignments",
         href: "/assignments",
-        label: "Assignments",
+        label: "Tasks",
         badge: myOpenTasks || undefined,
       },
-      { key: "departments", href: "/departments", label: "Departments", badge: undefined },
+      { key: "departments", href: "/departments", label: "Teams & departments", badge: undefined },
       { key: "people", href: "/people", label: "People", badge: undefined },
       { key: "documents", href: "/documents", label: "Documents", badge: undefined },
       { key: "files", href: "/files", label: "Files & Assets", badge: undefined },
@@ -66,7 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {
         key: "announcements",
         href: "/announcements",
-        label: "Announcements",
+        label: "Updates",
         badge: unreadAnnouncements || undefined,
       },
     ] as const
@@ -100,7 +100,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (isAdmin(viewer) && sees("audit")) items.push({ href: "/admin/audit", label: "Audit log" });
 
   return (
-    <div className="lg:flex">
+    <div className="hs-workspace lg:flex">
       {/* useSearchParams inside the nav's search box needs a Suspense boundary
           or the whole app layout opts out of static rendering. */}
       <Suspense fallback={null}>
