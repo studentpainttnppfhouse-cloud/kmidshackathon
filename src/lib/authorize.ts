@@ -1,6 +1,7 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { getViewer } from "@/lib/session";
+import { auditDenied } from "@/lib/audit";
 import { atLeast, can, pageLevel, type Action, type Resource, type Viewer } from "@/lib/policy";
 import { PAGE_BY_KEY, type PageKey } from "@/lib/pages";
 import type { Tier } from "@prisma/client";
@@ -32,7 +33,14 @@ export async function requireViewer(): Promise<Viewer> {
 
 export async function requireTier(tier: Tier): Promise<Viewer> {
   const viewer = await requireViewer();
-  if (!atLeast(viewer, tier)) redirect("/dashboard?denied=1");
+  if (!atLeast(viewer, tier)) {
+    await auditDenied(viewer.id, "access.denied", `Needs ${tier}, has ${viewer.tier}`, {
+      type: "tier",
+      id: tier,
+      detail: "Tried to open a page above their tier",
+    });
+    redirect("/dashboard?denied=1");
+  }
   return viewer;
 }
 
@@ -50,8 +58,22 @@ export async function requirePageAccess(
 ): Promise<Viewer> {
   const viewer = await requireViewer();
   const granted = pageLevel(viewer, key);
-  if (granted === "NONE") redirect("/dashboard?denied=page");
-  if (level === "edit" && granted !== "EDIT") redirect(`${PAGE_BY_KEY[key].href}?denied=edit`);
+  if (granted === "NONE") {
+    await auditDenied(viewer.id, "access.denied", `Page "${key}" is switched off for ${viewer.tier}`, {
+      type: "page",
+      id: key,
+      detail: `Tried to open ${PAGE_BY_KEY[key].label}`,
+    });
+    redirect("/dashboard?denied=page");
+  }
+  if (level === "edit" && granted !== "EDIT") {
+    await auditDenied(viewer.id, "access.denied", `Only ${granted} access on "${key}"`, {
+      type: "page",
+      id: key,
+      detail: `Tried to edit on ${PAGE_BY_KEY[key].label}`,
+    });
+    redirect(`${PAGE_BY_KEY[key].href}?denied=edit`);
+  }
   return viewer;
 }
 
@@ -65,6 +87,10 @@ export class AuthorizationError extends Error {
 /** Throwing guard for server actions, where a redirect would swallow the error. */
 export function assertCan(viewer: Viewer | null, action: Action, resource: Resource): void {
   if (!can(viewer, action, resource)) {
+    void auditDenied(viewer?.id ?? null, "action.denied", `Not allowed to ${action} this ${resource.kind}`, {
+      type: resource.kind,
+      detail: `Tried to ${action.replace(/_/g, " ")}`,
+    });
     throw new AuthorizationError(action, resource.kind);
   }
 }

@@ -8,6 +8,8 @@ import { Avatar, Card, DocStatusPill, EmptyState, SectionTitle, TierPill } from 
 import { formatDateLong } from "@/lib/dates";
 import { decryptField } from "@/lib/crypto";
 import { swatchStyle } from "@/lib/color";
+import { TIER_ORDER } from "@/lib/constants";
+import { ResetLinkPanel } from "../people-widgets";
 
 export const metadata: Metadata = { title: "Profile" };
 export const dynamic = "force-dynamic";
@@ -27,6 +29,8 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
       name: true,
       nickname: true,
       email: true,
+      username: true,
+      passwordHash: true,
       grade: true,
       phone: true,
       lineId: true,
@@ -134,11 +138,22 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
 
         {isAdmin(viewer) ? (
           <p className="mt-4 text-xs text-faint">
-            {person.email} · joined {formatDateLong(person.createdAt)} · last signed in{" "}
+            {person.email}
+            {person.username ? ` · @${person.username}` : ""} · joined {formatDateLong(person.createdAt)} · last signed in{" "}
             {person.lastLoginAt ? formatDateLong(person.lastLoginAt) : "never"}
           </p>
         ) : null}
       </Card>
+
+      {isAdmin(viewer) && TIER_ORDER[person.tier] <= TIER_ORDER[viewer.tier] ? (
+        <Card>
+          <SectionTitle>Password reset</SectionTitle>
+          <p className="-mt-2 mb-3 text-xs text-muted">
+            {person.passwordHash ? "Has a password." : "Has not set a password yet."} The link works once and you send it yourself.
+          </p>
+          <ResetLinkPanel userId={person.id} name={person.nickname || person.name} />
+        </Card>
+      ) : null}
 
       <Card>
         <SectionTitle>Assignments</SectionTitle>

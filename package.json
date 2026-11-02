@@ -26,6 +26,8 @@
   },
   "dependencies": {
     "@prisma/client": "6.2.1",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.3",
     "bcryptjs": "2.4.3",
     "next": "^16.4.3",
     "qrcode-generator": "^2.0.4",

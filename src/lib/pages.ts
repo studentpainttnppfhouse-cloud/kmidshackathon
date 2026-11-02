@@ -33,6 +33,8 @@ import type { PageAccessLevel, Tier } from "@prisma/client";
 export type PageKey =
   | "dashboard"
   | "assignments"
+  | "my-tasks"
+  | "calendar"
   | "departments"
   | "people"
   | "documents"
@@ -86,11 +88,25 @@ export const PORTAL_PAGES: readonly PortalPage[] = [
     blurb: "Where everybody lands. Countdown, own tasks, latest announcements.",
   },
   {
+    key: "my-tasks",
+    label: "My tasks",
+    href: "/my-tasks",
+    nav: true,
+    blurb: "A person's own tasks, whatever team they sit in.",
+  },
+  {
     key: "assignments",
-    label: "Assignments",
+    label: "Board",
     href: "/assignments",
     nav: true,
-    blurb: "The task board: who owes what, by when, and what state it is in.",
+    blurb: "Task pages. The board and list index is for heads and up; members open their own tasks from here.",
+  },
+  {
+    key: "calendar",
+    label: "Calendar",
+    href: "/calendar",
+    nav: true,
+    blurb: "Every visible task laid out by due date.",
   },
   {
     key: "departments",
@@ -115,17 +131,17 @@ export const PORTAL_PAGES: readonly PortalPage[] = [
   },
   {
     key: "files",
-    label: "Files & Assets",
+    label: "Files & Assets (now in Brand kit)",
     href: "/files",
-    nav: true,
+    nav: false,
     blurb: "Uploads and links: decks, exports, photos, anything shared.",
   },
   {
     key: "brand",
-    label: "Brand Kit",
+    label: "Brand kit",
     href: "/brand",
     nav: true,
-    blurb: "Colours, type and logo rules, plus the downloadable kit.",
+    blurb: "Colours, type and logo rules, plus every shared file and asset.",
   },
   {
     key: "forms",

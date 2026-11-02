@@ -56,7 +56,7 @@ test("a corrupt definition returns null rather than throwing", () => {
 test("an unknown question type is refused", () => {
   const result = formDefinitionSchema.safeParse({
     version: 1,
-    questions: [{ ...question(), type: "file_upload" }],
+    questions: [{ ...question(), type: "hologram" }],
   });
   assert.equal(result.success, false);
 });
@@ -151,4 +151,37 @@ test("answerText renders both single and multiple answers", () => {
   assert.equal(answerText({ q1: "Ploy" }, single), "Ploy");
   assert.equal(answerText({ q2: ["A", "B"] }, multi), "A, B");
   assert.equal(answerText({}, single), "");
+});
+
+test("upload answers are type-, size- and count-checked on the server", () => {
+  const spec = definition(question({ type: "image_upload", required: true, maxFiles: 1 }));
+  const png = new File([new Uint8Array([1, 2, 3])], "photo.png", { type: "image/png" });
+  const html = new File([new Uint8Array([1])], "evil.html", { type: "image/png" });
+
+  const good = validateResponse(spec, form({}) as FormData, { maxBytes: 100 });
+  assert.equal(good.ok, false);
+
+  const data = new FormData();
+  data.append("q_q1", png);
+  const ok = validateResponse(spec, data, { maxBytes: 100 });
+  assert.equal(ok.ok, true);
+  assert.equal((ok as { files: Record<string, File[]> }).files.q1.length, 1);
+
+  const wrong = new FormData();
+  wrong.append("q_q1", html);
+  assert.equal(validateResponse(spec, wrong, { maxBytes: 100 }).ok, false);
+
+  const big = new FormData();
+  big.append("q_q1", png);
+  assert.equal(validateResponse(spec, big, { maxBytes: 2 }).ok, false);
+
+  const two = new FormData();
+  two.append("q_q1", png);
+  two.append("q_q1", png);
+  assert.equal(validateResponse(spec, two, { maxBytes: 100 }).ok, false);
+
+  // A re-submission with no new file keeps what was stored.
+  const kept = validateResponse(spec, new FormData(), { maxBytes: 100, previous: { q1: ["att1"] } });
+  assert.equal(kept.ok, true);
+  assert.deepEqual((kept as { payload: Record<string, unknown> }).payload.q1, ["att1"]);
 });

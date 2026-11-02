@@ -7,14 +7,17 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { assertCan, can, requireViewer } from "@/lib/authorize";
 import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
+import { createHash } from "node:crypto";
 import {
-  QUESTION_TYPES,
-  TYPES_WITH_OPTIONS,
+  checkDefinition,
   formDefinitionSchema,
+  isUpload,
   parseDefinition,
   validateResponse,
   type FormDefinition,
+  type ResponsePayload,
 } from "@/lib/forms-schema";
+import { CHUNK_BYTES, MAX_UPLOAD_BYTES, formatBytes, safeFileName, safeMimeType } from "@/lib/attachments";
 import type { FormState } from "@/lib/actions/auth";
 
 /**
@@ -49,24 +52,8 @@ function readDefinition(raw: string): { ok: true; value: FormDefinition } | { ok
     return { ok: false, error: parsed.error.issues[0]?.message ?? "That form is not valid." };
   }
 
-  // Structural rules the field-level schema cannot express.
-  const seen = new Set<string>();
-  for (const question of parsed.data.questions) {
-    if (seen.has(question.id)) {
-      return { ok: false, error: "Two questions ended up with the same id. Reload and try again." };
-    }
-    seen.add(question.id);
-
-    if (!QUESTION_TYPES.includes(question.type)) {
-      return { ok: false, error: "That question type is not one the portal supports." };
-    }
-    if (TYPES_WITH_OPTIONS.includes(question.type) && question.options.length < 1) {
-      return { ok: false, error: `"${question.label}" needs at least one option.` };
-    }
-    if (new Set(question.options).size !== question.options.length) {
-      return { ok: false, error: `"${question.label}" has the same option twice.` };
-    }
-  }
+  const problem = checkDefinition(parsed.data);
+  if (problem) return { ok: false, error: problem };
 
   return { ok: true, value: parsed.data };
 }
@@ -113,11 +100,25 @@ export async function saveInternalForm(_prev: FormState, formData: FormData): Pr
     deadline: formData.get("deadline") ?? "",
     isOpen: formData.get("isOpen") === "on",
   });
-  if (!meta.success) return { error: meta.error.issues[0].message };
+  if (!meta.success) {
+    await audit(viewer.id, "form.save_failed", {
+      type: "form",
+      id: id || undefined,
+      detail: `Form not saved: ${meta.error.issues[0].message}`,
+    });
+    return { error: meta.error.issues[0].message };
+  }
   const d = meta.data;
 
   const definition = readDefinition(String(formData.get("definition") ?? ""));
-  if (!definition.ok) return { error: definition.error };
+  if (!definition.ok) {
+    await audit(viewer.id, "form.save_failed", {
+      type: "form",
+      id: id || undefined,
+      detail: `Form "${d.title}" not saved: ${definition.error}`,
+    });
+    return { error: definition.error };
+  }
 
   const departmentId = d.departmentId || null;
   if (departmentId) {
@@ -157,7 +158,11 @@ export async function saveInternalForm(_prev: FormState, formData: FormData): Pr
       },
     });
 
-    await audit(viewer.id, "form.updated", { type: "form", id, detail: d.title });
+    await audit(viewer.id, "form.updated", {
+      type: "form",
+      id,
+      detail: `Updated form "${d.title}" (${definition.value.questions.length} questions)`,
+    });
     revalidatePath("/forms");
     revalidatePath(`/forms/${id}`);
     return { ok: "Form saved." };
@@ -179,7 +184,11 @@ export async function saveInternalForm(_prev: FormState, formData: FormData): Pr
     },
   });
 
-  await audit(viewer.id, "form.created", { type: "form", id: created.id, detail: d.title });
+  await audit(viewer.id, "form.created", {
+    type: "form",
+    id: created.id,
+    detail: `Created form "${d.title}" (${definition.value.questions.length} questions)`,
+  });
   revalidatePath("/forms");
   redirect(`/forms/${created.id}`);
 }
@@ -190,7 +199,7 @@ export async function setFormOpen(id: string, open: boolean): Promise<void> {
 
   const form = await db.form.findUnique({
     where: { id },
-    select: { ownerId: true, departmentId: true, deletedAt: true },
+    select: { ownerId: true, departmentId: true, deletedAt: true, title: true },
   });
   if (!form || form.deletedAt) return;
 
@@ -201,7 +210,11 @@ export async function setFormOpen(id: string, open: boolean): Promise<void> {
   });
 
   await db.form.update({ where: { id }, data: { isOpen: open } });
-  await audit(viewer.id, open ? "form.opened" : "form.closed", { type: "form", id });
+  await audit(viewer.id, open ? "form.opened" : "form.closed", {
+    type: "form",
+    id,
+    detail: `${open ? "Reopened" : "Closed"} form "${form.title}" for responses`,
+  });
   revalidatePath("/forms");
   revalidatePath(`/forms/${id}`);
 }
@@ -212,16 +225,25 @@ export async function setFormOpen(id: string, open: boolean): Promise<void> {
 
 export async function submitFormResponse(_prev: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireViewer();
+  const formId = String(formData.get("formId") ?? "");
+
+  const refuse = async (error: string, reason: string) => {
+    await audit(viewer.id, "form.response.rejected", {
+      type: "form",
+      id: formId || undefined,
+      detail: `Response refused: ${reason}`,
+    });
+    return { error };
+  };
 
   const limit = rateLimit(`form:${viewer.id}`, RULES.write);
-  if (!limit.ok) return { error: retryMessage(limit.retryAfter) };
-
-  const formId = String(formData.get("formId") ?? "");
+  if (!limit.ok) return refuse(retryMessage(limit.retryAfter), "rate limited");
 
   const form = await db.form.findUnique({
     where: { id: formId },
     select: {
       id: true,
+      title: true,
       type: true,
       schema: true,
       isOpen: true,
@@ -233,55 +255,132 @@ export async function submitFormResponse(_prev: FormState, formData: FormData): 
   });
 
   if (!form || form.deletedAt || form.type !== "internal") {
-    return { error: "That form is not available." };
+    return refuse("That form is not available.", "form missing or not a portal form");
   }
   // "comment" rather than "read": answering a form is the one write a tier held
-  // below Full on this page is still meant to be able to do, and the page grid
-  // draws the line in exactly that place.
-  if (
-    !can(viewer, "comment", {
-      kind: "form",
-      departmentId: form.departmentId,
-      ownerId: form.ownerId,
-    })
-  ) {
-    return { error: "That form is not available." };
+  // below Full on this page is still meant to be able to do.
+  if (!can(viewer, "comment", { kind: "form", departmentId: form.departmentId, ownerId: form.ownerId })) {
+    return refuse("That form is not available.", `no permission to answer "${form.title}"`);
   }
-  if (!form.isOpen) return { error: "This form is closed." };
+  if (!form.isOpen) return refuse("This form is closed.", `"${form.title}" is closed`);
   if (form.deadline && form.deadline.getTime() < Date.now()) {
-    return { error: "The deadline for this form has passed." };
+    return refuse("The deadline for this form has passed.", `"${form.title}" is past its deadline`);
   }
 
   const definition = parseDefinition(form.schema);
-  if (!definition) return { error: "This form has no questions yet." };
+  if (!definition) return refuse("This form has no questions yet.", `"${form.title}" has no valid questions`);
 
-  // The definition decides what a valid answer is — never the posted body.
-  const validated = validateResponse(definition, formData);
-  if (!validated.ok) return { error: validated.error };
-
-  // One response per person, replaced on re-submit. A form nobody can correct
-  // is a form people fill in wrong once and then message a head about.
+  // One response per person, replaced on re-submit.
   const existing = await db.formResponse.findFirst({
     where: { formId: form.id, userId: viewer.id },
-    select: { id: true },
+    select: { id: true, payload: true },
   });
+  const previous = (existing?.payload ?? null) as ResponsePayload | null;
 
-  if (existing) {
-    await db.formResponse.update({
-      where: { id: existing.id },
-      data: { payload: validated.payload, submittedAt: new Date() },
-    });
-  } else {
-    await db.formResponse.create({
-      data: { formId: form.id, userId: viewer.id, payload: validated.payload },
-    });
+  // The definition decides what a valid answer is, never the posted body.
+  const validated = validateResponse(definition, formData, {
+    maxBytes: MAX_UPLOAD_BYTES,
+    previous,
+  });
+  if (!validated.ok) return refuse(validated.error, `"${form.title}": ${validated.error}`);
+
+  const response = existing
+    ? await db.formResponse.update({
+        where: { id: existing.id },
+        data: { payload: validated.payload, submittedAt: new Date() },
+        select: { id: true },
+      })
+    : await db.formResponse.create({
+        data: { formId: form.id, userId: viewer.id, payload: validated.payload },
+        select: { id: true },
+      });
+
+  // Files go into the attachments store under the response, so downloads use
+  // the same permission check as every other attachment.
+  const payload: ResponsePayload = { ...validated.payload };
+  let stored = 0;
+  for (const question of definition.questions) {
+    if (!isUpload(question.type)) continue;
+    const picked = validated.files[question.id];
+    const old = previous?.[question.id];
+    const replaced = picked || !(question.id in payload);
+    if (replaced && Array.isArray(old) && old.length > 0) {
+      await retireAttachments(old, response.id);
+    }
+    if (!picked) continue;
+
+    const ids: string[] = [];
+    for (const file of picked) {
+      ids.push(await storeFile(file, response.id, form.departmentId, viewer.id));
+      stored += 1;
+    }
+    payload[question.id] = ids;
+  }
+  if (stored > 0 || Object.keys(payload).length !== Object.keys(validated.payload).length) {
+    await db.formResponse.update({ where: { id: response.id }, data: { payload } });
   }
 
-  await audit(viewer.id, "form.response.submitted", { type: "form", id: form.id });
+  await audit(viewer.id, existing ? "form.response.updated" : "form.response.submitted", {
+    type: "form",
+    id: form.id,
+    detail: `${existing ? "Updated answers to" : "Answered"} "${form.title}"${stored ? ` with ${stored} file${stored === 1 ? "" : "s"}` : ""}`,
+  });
   revalidatePath(`/forms/${form.id}`);
+  revalidatePath(`/forms/${form.id}/responses`);
   revalidatePath("/forms");
 
-  return { ok: existing ? "Your answers were updated." : "Thanks — your answers are in." };
+  return { ok: existing ? "Your answers were updated." : "Your answers are in." };
+}
+
+async function storeFile(
+  file: File,
+  responseId: string,
+  departmentId: string | null,
+  userId: string,
+): Promise<string> {
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const name = safeFileName(file.name);
+  const attachment = await db.attachment.create({
+    data: {
+      parentType: "form_response",
+      parentId: responseId,
+      name,
+      mimeType: safeMimeType(file.type, name),
+      size: bytes.byteLength,
+      checksum: createHash("sha256").update(bytes).digest("hex"),
+      storage: "db",
+      departmentId,
+      uploadedById: userId,
+    },
+    select: { id: true },
+  });
+  for (let offset = 0, idx = 0; offset < bytes.byteLength; offset += CHUNK_BYTES, idx += 1) {
+    await db.attachmentChunk.create({
+      data: {
+        attachmentId: attachment.id,
+        idx,
+        bytes: bytes.subarray(offset, Math.min(offset + CHUNK_BYTES, bytes.byteLength)),
+      },
+    });
+  }
+  await audit(userId, "attachment.uploaded", {
+    type: "form_response",
+    id: responseId,
+    detail: `Form answer file ${name} (${formatBytes(bytes.byteLength)})`,
+  });
+  return attachment.id;
+}
+
+/** Soft-deletes files a re-submission replaced. Only ones under this response. */
+async function retireAttachments(ids: string[], responseId: string): Promise<void> {
+  const rows = await db.attachment.findMany({
+    where: { id: { in: ids }, parentType: "form_response", parentId: responseId, deletedAt: null },
+    select: { id: true },
+  });
+  if (rows.length === 0) return;
+  const found = rows.map((row) => row.id);
+  await db.attachment.updateMany({ where: { id: { in: found } }, data: { deletedAt: new Date() } });
+  await db.attachmentChunk.deleteMany({ where: { attachmentId: { in: found } } });
 }
 
 export async function deleteFormResponse(id: string): Promise<void> {
@@ -304,7 +403,18 @@ export async function deleteFormResponse(id: string): Promise<void> {
     });
   }
 
+  const files = await db.attachment.findMany({
+    where: { parentType: "form_response", parentId: id, deletedAt: null },
+    select: { id: true },
+  });
+  if (files.length > 0) await retireAttachments(files.map((f) => f.id), id);
+
   await db.formResponse.delete({ where: { id } });
-  await audit(viewer.id, "form.response.deleted", { type: "form", id: response.formId });
+  await audit(viewer.id, "form.response.deleted", {
+    type: "form",
+    id: response.formId,
+    detail: mine ? "Withdrew own response" : "Removed a response from the responses table",
+  });
   revalidatePath(`/forms/${response.formId}`);
+  revalidatePath(`/forms/${response.formId}/responses`);
 }

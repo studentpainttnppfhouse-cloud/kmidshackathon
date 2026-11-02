@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getViewer } from "@/lib/session";
-import { can, canSeePage, isAdmin, isOwner } from "@/lib/authorize";
+import { atLeast, canSeePage, isAdmin, isOwner } from "@/lib/authorize";
 import { signOut } from "@/lib/actions/auth";
 import { SETTING_KEYS, getSettings } from "@/lib/settings";
 import { pageForPath } from "@/lib/pages";
@@ -28,19 +28,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const here = pageForPath((await headers()).get("x-pathname") ?? "");
   if (here && !canSeePage(viewer, here.key)) redirect("/dashboard?denied=page");
 
-  const [myOpenTasks, unreadAnnouncements, settings] = await Promise.all([
+  const [myOpenTasks, settings] = await Promise.all([
     db.assignment.count({
       where: {
         deletedAt: null,
         status: { notIn: ["DONE", "APPROVED"] },
         assignees: { some: { userId: viewer.id } },
-      },
-    }),
-    db.announcement.count({
-      where: {
-        deletedAt: null,
-        OR: [{ scope: "all" }, { departmentId: viewer.departmentId ?? "__none__" }],
-        reads: { none: { userId: viewer.id } },
       },
     }),
     getSettings([SETTING_KEYS.eventPanel, SETTING_KEYS.contactLine]),
@@ -51,53 +44,30 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items: NavItem[] = (
     [
       { key: "dashboard", href: "/dashboard", label: "Home", badge: undefined },
+      { key: "announcements", href: "/announcements", label: "Announcements", badge: undefined },
       {
-        key: "assignments",
-        href: "/assignments",
-        label: "Tasks",
+        key: "my-tasks",
+        href: "/my-tasks",
+        label: "My tasks",
         badge: myOpenTasks || undefined,
       },
+      ...(atLeast(viewer, "T2_HEAD")
+        ? ([{ key: "assignments", href: "/assignments", label: "Board", badge: undefined }] as const)
+        : []),
+      { key: "calendar", href: "/calendar", label: "Calendar", badge: undefined },
       { key: "departments", href: "/departments", label: "Teams & departments", badge: undefined },
       { key: "people", href: "/people", label: "People", badge: undefined },
       { key: "documents", href: "/documents", label: "Documents", badge: undefined },
-      { key: "files", href: "/files", label: "Files & Assets", badge: undefined },
-      { key: "brand", href: "/brand", label: "Brand Kit", badge: undefined },
+      { key: "brand", href: "/brand", label: "Brand kit", badge: undefined },
       { key: "forms", href: "/forms", label: "Forms", badge: undefined },
-      {
-        key: "announcements",
-        href: "/announcements",
-        label: "Updates",
-        badge: unreadAnnouncements || undefined,
-      },
     ] as const
   )
     .filter((item) => sees(item.key))
     .map(({ href, label, badge }) => ({ href, label, badge }));
 
-  // Event Day is off until an admin turns it on — an empty run sheet in the
-  // navigation for eleven months of the year reads as a broken page. Admins
-  // keep the link so there is a way back to the switch. Hiding it is a display
-  // decision only: /event still checks permissions for itself.
-  const eventVisible = settings[SETTING_KEYS.eventPanel] === "1";
-  if ((eventVisible || isAdmin(viewer)) && sees("event")) {
-    items.push({
-      href: "/event",
-      label: eventVisible ? "Event Day" : "Event Day (hidden)",
-    });
-  }
-
-  // Teams notifications are a head's tool, so the link appears for anyone who
-  // may send to at least one department. `can()` decides; this only draws.
-  const canNotify =
-    can(viewer, "notify", { kind: "notification", departmentId: null }) ||
-    (viewer.departmentId !== null &&
-      can(viewer, "notify", { kind: "notification", departmentId: viewer.departmentId }));
-  if (canNotify && sees("notifications")) {
-    items.push({ href: "/notifications", label: "Teams alerts" });
-  }
-
   if (isAdmin(viewer) && sees("admin")) items.push({ href: "/admin", label: "Admin" });
   if (isAdmin(viewer) && sees("audit")) items.push({ href: "/admin/audit", label: "Audit log" });
+  items.push({ href: "/assistant", label: "Assistant" });
 
   return (
     <div className="hs-workspace lg:flex">

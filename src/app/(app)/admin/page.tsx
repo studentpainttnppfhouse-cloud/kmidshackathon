@@ -78,16 +78,19 @@ export default async function AdminPage() {
         eyebrow="Administration"
         title="Accounts, invites & access"
         action={
-          owner ? (
-            <>
-              <Link href="/admin/access" className="hs-btn hs-btn-secondary">
-                Page access
-              </Link>
+          <>
+            <Link href="/admin/audit" className="hs-btn hs-btn-secondary">
+              Audit log
+            </Link>
+            <Link href="/admin/access" className="hs-btn hs-btn-secondary">
+              Page access
+            </Link>
+            {owner ? (
               <Link href="/people/import" className="hs-btn hs-btn-primary">
                 <span aria-hidden="true">＋</span> Import people
               </Link>
-            </>
-          ) : null
+            ) : null}
+          </>
         }
       />
 
@@ -375,10 +378,6 @@ export default async function AdminPage() {
       {owner ? (
         <Card>
           <SectionTitle>Data</SectionTitle>
-          <p className="mb-3 -mt-2 text-sm text-muted">
-            The export works from day one. If the project stalls or the hosting
-            goes away, the data still comes out.
-          </p>
           <div className="flex flex-wrap gap-2">
             <a href="/api/export" className="hs-btn hs-btn-primary">
               Export everything (JSON)

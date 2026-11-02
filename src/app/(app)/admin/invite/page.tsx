@@ -6,8 +6,8 @@ import { revokeJoinLink } from "@/lib/actions/join-links";
 import { CopyLink } from "@/components/admin-widgets";
 import { JoinLinkForm } from "@/components/join-link-widgets";
 import { QrCode } from "@/components/qr";
-import { Banner, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
-import { JOIN_LINK_MAX_TIER, TIER_LABEL } from "@/lib/constants";
+import { Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
+import { TIER_LABEL } from "@/lib/constants";
 import { joinLinkStatus, usesLabel } from "@/lib/join-links";
 import { appOrigin } from "@/lib/request";
 import { formatDateLong } from "@/lib/dates";
@@ -46,7 +46,6 @@ export default async function InvitePeoplePage() {
       <PageHeader
         eyebrow="Administration"
         title="Invite people"
-        subtitle="One link and one code the whole team can use, instead of sixty separate invites."
         action={
           <Link href="/admin" className="hs-btn hs-btn-ghost">
             Back to admin
@@ -54,13 +53,6 @@ export default async function InvitePeoplePage() {
         }
       />
 
-      <Banner tone="info">
-        A join link is a key: anyone holding it who has a{" "}
-        <strong>school email address</strong> can make an account. That is the point of it, and it
-        is why a link can never grant more than {TIER_LABEL[JOIN_LINK_MAX_TIER]}, why every use is
-        counted, and why switching one off kills every copy of the poster at once. For one named
-        person, send a personal invite from the admin page instead.
-      </Banner>
 
       {live.length === 0 ? (
         <EmptyState
@@ -127,10 +119,6 @@ export default async function InvitePeoplePage() {
 
       <Card>
         <SectionTitle>Make a join link</SectionTitle>
-        <p className="mb-4 -mt-2 text-sm text-muted">
-          Name it after where it is going, so a link you find in six weeks still tells you who has
-          it. Everything else has a working default.
-        </p>
         <JoinLinkForm
           departments={departments.map((d) => ({ id: d.id, name: d.name, slug: d.slug }))}
         />

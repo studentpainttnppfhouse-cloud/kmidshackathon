@@ -26,10 +26,6 @@ export default async function NewAnnouncementPage() {
     return (
       <div className="hs-enter space-y-4">
         <PageHeader eyebrow="Announcements" title="Only heads and admins post here" />
-        <p className="text-sm text-muted">
-          Announcements go out to a whole department or the whole team, so posting one is a head's
-          call. Ask yours.
-        </p>
         <Link href="/announcements" className="hs-btn hs-btn-secondary">
           Back to announcements
         </Link>
@@ -42,7 +38,6 @@ export default async function NewAnnouncementPage() {
       <PageHeader
         eyebrow="Announcements"
         title="Post an announcement"
-        subtitle="Urgent things still go to LINE. This is where they stay findable afterwards."
         action={
           <Link href="/announcements" className="hs-btn hs-btn-ghost">
             Cancel
