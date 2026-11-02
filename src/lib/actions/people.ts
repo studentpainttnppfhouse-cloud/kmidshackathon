@@ -1,258 +1,374 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { assertCan, requireViewer } from "@/lib/authorize";
-import { emailSchema, generateCode } from "@/lib/auth";
-import { INVITE_TTL_DAYS, TIER_ORDER } from "@/lib/constants";
+import { requireViewer, isAdmin } from "@/lib/authorize";
+import { emailSchema, generateCode, normalizeEmail, usernameSchema } from "@/lib/auth";
+import { RESET_TTL_HOURS, TIER_LABEL, TIER_ORDER } from "@/lib/constants";
 import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
+import { appOrigin, clientIp, displayIp, looksAutomated } from "@/lib/request";
 import type { FormState } from "@/lib/actions/auth";
-import type { Tier } from "@prisma/client";
+import type { RecoveryKind, Tier } from "@prisma/client";
+import type { Viewer } from "@/lib/policy";
 
 /**
- * Bulk invites, pasted from a spreadsheet.
- *
- * Onboarding sixty people one form at a time is the sort of chore that ends
- * with somebody sharing one login, so the portal takes a CSV paste instead.
- *
- * It is *invites* that get created, never accounts: an imported row cannot
- * arrive with a password, so there is no way for this to mint a usable login
- * that nobody chose the credentials for. Every row is validated exactly as the
- * single-invite form validates its one row — same email schema, same domain
- * check, same tier ceiling — because a bulk path that is more permissive than
- * the single path is a bulk path that will be used to get around the single one.
+ * People: adding someone, handing out reset links, and the account recovery
+ * queue. Admin and owner only, except `requestRecovery`, which is public.
  */
 
-const MAX_ROWS = 300;
+const TIERS = ["T0_ADVISOR", "T1_MEMBER", "T2_HEAD", "T3_ADMIN", "T4_OWNER"] as const satisfies readonly Tier[];
 
-type Row = {
-  line: number;
-  email: string;
-  name: string;
-  tier: Tier;
-  departmentSlug: string;
-  roleTitle: string;
-};
+const AVATAR_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
-export type ImportResult = FormState & {
-  created?: number;
-  skipped?: { line: number; email: string; reason: string }[];
-};
+export type LinkState = FormState & { url?: string };
 
-/**
- * Splits one CSV line, honouring double-quoted fields.
- *
- * Written out rather than `line.split(",")` because a role title like
- * "Head, Sponsorship" is exactly what somebody pastes, and a naive split turns
- * it into a shifted row that lands the tier in the department column.
- */
-function splitCsvLine(line: string): string[] {
-  const cells: string[] = [];
-  let cell = "";
-  let quoted = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-
-    if (quoted) {
-      if (char === '"') {
-        if (line[i + 1] === '"') {
-          cell += '"';
-          i += 1;
-        } else {
-          quoted = false;
-        }
-      } else {
-        cell += char;
-      }
-      continue;
-    }
-
-    if (char === '"') quoted = true;
-    else if (char === ",") {
-      cells.push(cell);
-      cell = "";
-    } else cell += char;
-  }
-
-  cells.push(cell);
-  return cells.map((value) => value.trim());
+function displayName(user: { name: string; nickname?: string | null }): string {
+  return user.nickname || user.name;
 }
 
-const HEADER_WORDS = ["email", "e-mail", "address"];
-
-export async function importPeople(_prev: ImportResult, formData: FormData): Promise<ImportResult> {
+async function requireAdminViewer(action: string): Promise<Viewer> {
   const viewer = await requireViewer();
-  assertCan(viewer, "manage_users", { kind: "user", userId: viewer.id });
+  if (!isAdmin(viewer)) {
+    await audit(viewer.id, "access.denied", {
+      type: "page",
+      id: "people",
+      detail: `Tried to ${action} without admin or owner rights.`,
+    });
+    throw new Error("Only admins and owners can do that.");
+  }
+  return viewer;
+}
 
-  const limit = rateLimit(`import:${viewer.id}`, RULES.write);
+/**
+ * Burn any open reset links for the person and issue a new one. Returns the
+ * absolute URL to hand over; the code itself is never written to the audit log.
+ */
+async function issueResetFor(
+  viewer: Viewer,
+  userId: string,
+  reason: string,
+): Promise<{ url: string; resetId: string } | { error: string }> {
+  const target = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, nickname: true, tier: true, deletedAt: true },
+  });
+  if (!target || target.deletedAt) return { error: "That person no longer exists." };
+  if (TIER_ORDER[target.tier] > TIER_ORDER[viewer.tier]) {
+    await audit(viewer.id, "password.reset.denied", {
+      type: "user",
+      id: userId,
+      detail: `Refused a reset link for ${displayName(target)}: their tier is above yours.`,
+    });
+    return { error: "You cannot issue a reset link for somebody above your own tier." };
+  }
+
+  await db.passwordReset.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+  const reset = await db.passwordReset.create({
+    data: {
+      userId,
+      code: generateCode(),
+      issuedById: viewer.id,
+      expiresAt: new Date(Date.now() + RESET_TTL_HOURS * 60 * 60 * 1000),
+    },
+  });
+
+  await audit(viewer.id, "password.reset.issued", {
+    type: "user",
+    id: userId,
+    detail: `${displayName(viewer)} issued a password reset link for ${displayName(target)}. Reason: ${reason}`.slice(0, 1000),
+  });
+
+  return { url: `${await appOrigin()}/reset/${reset.code}`, resetId: reset.id };
+}
+
+/** Tell every active admin and owner something, in the portal. */
+async function noticeAdmins(title: string, body: string, href: string): Promise<void> {
+  const admins = await db.user.findMany({
+    where: { tier: { in: ["T3_ADMIN", "T4_OWNER"] }, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (admins.length === 0) return;
+  await db.portalNotice.createMany({
+    data: admins.map((a) => ({ userId: a.id, title: title.slice(0, 190), body, href })),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Add a person
+// ---------------------------------------------------------------------------
+
+const addSchema = z.object({
+  name: z.string().trim().min(1, "Give the person's name.").max(120),
+  email: emailSchema,
+  username: usernameSchema.optional().or(z.literal("")),
+  tier: z.enum(TIERS),
+  roleTitle: z.string().trim().max(80).optional().or(z.literal("")),
+  departmentId: z.string().optional().or(z.literal("")),
+});
+
+export async function addPerson(_prev: LinkState, formData: FormData): Promise<LinkState> {
+  const viewer = await requireAdminViewer("add a person");
+
+  const limit = rateLimit(`write:${viewer.id}`, RULES.write);
   if (!limit.ok) return { error: retryMessage(limit.retryAfter) };
 
-  const raw = String(formData.get("rows") ?? "");
-  if (raw.trim().length === 0) return { error: "Paste some rows first." };
-  if (raw.length > 200_000) return { error: "That is more than one import can take. Split it up." };
+  const parsed = addSchema.safeParse({
+    name: formData.get("name") ?? "",
+    email: formData.get("email") ?? "",
+    username: String(formData.get("username") ?? "").trim().toLowerCase(),
+    tier: formData.get("tier") ?? "T1_MEMBER",
+    roleTitle: formData.get("roleTitle") ?? "",
+    departmentId: formData.get("departmentId") ?? "",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const d = parsed.data;
 
-  const defaultTier = String(formData.get("defaultTier") ?? "T1_MEMBER") as Tier;
-  if (!(defaultTier in TIER_ORDER)) return { error: "Pick a valid default tier." };
-  if (TIER_ORDER[defaultTier] > TIER_ORDER[viewer.tier]) {
-    return { error: "You cannot invite people at a higher tier than your own." };
-  }
-
-  const departments = await db.department.findMany({ select: { id: true, slug: true, name: true } });
-  const bySlug = new Map(departments.map((d) => [d.slug.toLowerCase(), d.id]));
-  const byName = new Map(departments.map((d) => [d.name.toLowerCase(), d.id]));
-
-  const lines = raw
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length > MAX_ROWS) {
-    return { error: `That is ${lines.length} rows. Import at most ${MAX_ROWS} at a time.` };
-  }
-
-  const skipped: { line: number; email: string; reason: string }[] = [];
-  const rows: Row[] = [];
-  const seen = new Set<string>();
-
-  lines.forEach((line, index) => {
-    const lineNumber = index + 1;
-    const cells = splitCsvLine(line);
-
-    // A header row pasted along with the data is the normal case, not an error.
-    if (index === 0 && HEADER_WORDS.some((word) => cells[0]?.toLowerCase() === word)) return;
-
-    const [emailRaw = "", name = "", tierRaw = "", departmentRaw = "", roleTitle = ""] = cells;
-
-    const email = emailSchema.safeParse(emailRaw);
-    if (!email.success) {
-      skipped.push({ line: lineNumber, email: emailRaw.slice(0, 80), reason: email.error.issues[0].message });
-      return;
-    }
-
-    if (seen.has(email.data)) {
-      skipped.push({ line: lineNumber, email: email.data, reason: "Listed twice in this paste." });
-      return;
-    }
-    seen.add(email.data);
-
-    let tier = defaultTier;
-    if (tierRaw) {
-      const candidate = tierRaw.toUpperCase().replace(/[\s-]/g, "_") as Tier;
-      if (!(candidate in TIER_ORDER)) {
-        skipped.push({ line: lineNumber, email: email.data, reason: `Unknown tier "${tierRaw}".` });
-        return;
-      }
-      // The ceiling is re-checked per row: a CSV cell is browser input, and
-      // "T4_OWNER" in column three must not be a way past the check above.
-      if (TIER_ORDER[candidate] > TIER_ORDER[viewer.tier]) {
-        skipped.push({
-          line: lineNumber,
-          email: email.data,
-          reason: "That tier is above your own.",
-        });
-        return;
-      }
-      tier = candidate;
-    }
-
-    rows.push({
-      line: lineNumber,
-      email: email.data,
-      name: name.slice(0, 120),
-      tier,
-      departmentSlug: departmentRaw,
-      roleTitle: roleTitle.slice(0, 80),
+  if (TIER_ORDER[d.tier] > TIER_ORDER[viewer.tier]) {
+    await audit(viewer.id, "user.add_denied", {
+      type: "user",
+      detail: `Refused to add ${d.email} as ${TIER_LABEL[d.tier]}: above your own tier.`,
     });
-  });
-
-  if (rows.length === 0) {
-    return {
-      error: "No usable rows found.",
-      skipped: skipped.slice(0, 50),
-    };
+    return { error: "You cannot add somebody at a higher tier than your own." };
   }
 
-  // One query for every address in the paste rather than one per row.
-  const existing = await db.user.findMany({
-    where: { email: { in: rows.map((row) => row.email) } },
-    select: { email: true, passwordHash: true },
+  if (d.departmentId) {
+    const dept = await db.department.findUnique({ where: { id: d.departmentId }, select: { id: true } });
+    if (!dept) return { error: "That department no longer exists." };
+  }
+
+  if (await db.user.findUnique({ where: { email: d.email }, select: { id: true } })) {
+    return { error: "Somebody with that email is already in the portal." };
+  }
+  if (d.username && (await db.user.findUnique({ where: { username: d.username }, select: { id: true } }))) {
+    return { error: "That username is taken." };
+  }
+
+  // Validate the picture before writing anything.
+  const file = formData.get("avatar");
+  let avatar: { mime: string; bytes: Buffer } | null = null;
+  if (file instanceof File && file.size > 0) {
+    if (!AVATAR_TYPES.has(file.type)) return { error: "The picture must be a PNG, JPEG or WebP image." };
+    if (file.size > AVATAR_MAX_BYTES) return { error: "The picture must be 2 MB or smaller." };
+    avatar = { mime: file.type, bytes: Buffer.from(await file.arrayBuffer()) };
+  }
+
+  const user = await db.user.create({
+    data: {
+      name: d.name,
+      email: d.email,
+      username: d.username || null,
+      tier: d.tier,
+      roleTitle: d.roleTitle || null,
+      departmentId: d.departmentId || null,
+    },
   });
-  const hasAccount = new Set(
-    existing.filter((user) => user.passwordHash !== null).map((user) => user.email),
+
+  if (avatar) {
+    await db.avatarImage.create({ data: { userId: user.id, mime: avatar.mime, bytes: avatar.bytes } });
+    await db.user.update({
+      where: { id: user.id },
+      data: { avatarUrl: `${await appOrigin()}/api/avatar/${user.id}?v=${Date.now()}` },
+    });
+  }
+
+  await audit(viewer.id, "user.added", {
+    type: "user",
+    id: user.id,
+    detail: `${displayName(viewer)} added ${d.name} (${d.email}) as ${TIER_LABEL[d.tier]}${d.roleTitle ? `, ${d.roleTitle}` : ""}.`,
+  });
+
+  const link = await issueResetFor(viewer, user.id, "first-time password setup for a newly added person");
+  revalidatePath("/people");
+  if ("error" in link) return { ok: `${d.name} was added, but no setup link could be made: ${link.error}` };
+  return {
+    ok: `${d.name} is in. Send them this link to choose a password (valid ${RESET_TTL_HOURS} hours).`,
+    url: link.url,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reset link for one person
+// ---------------------------------------------------------------------------
+
+export async function generateResetLink(_prev: LinkState, formData: FormData): Promise<LinkState> {
+  const viewer = await requireAdminViewer("issue a password reset link");
+  const limit = rateLimit(`write:${viewer.id}`, RULES.write);
+  if (!limit.ok) return { error: retryMessage(limit.retryAfter) };
+
+  const userId = String(formData.get("userId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 300) || "issued from the People page";
+
+  const link = await issueResetFor(viewer, userId, reason);
+  if ("error" in link) return { error: link.error };
+
+  revalidatePath(`/people/${userId}`);
+  return {
+    ok: `Reset link ready. It works once and expires in ${RESET_TTL_HOURS} hours. Opening it signs out their other devices.`,
+    url: link.url,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Account recovery: public request, admin decision
+// ---------------------------------------------------------------------------
+
+const KINDS = ["USERNAME", "PASSWORD", "EMAIL", "OTHER"] as const satisfies readonly RecoveryKind[];
+
+const KIND_LABEL: Record<RecoveryKind, string> = {
+  USERNAME: "forgot their username",
+  PASSWORD: "forgot their password",
+  EMAIL: "forgot which email they use",
+  OTHER: "needs help signing in",
+};
+
+const recoverySchema = z.object({
+  kind: z.enum(KINDS),
+  contact: z.string().trim().min(3, "Tell us an email or your full name.").max(190),
+  name: z.string().trim().max(120).optional().or(z.literal("")),
+  message: z.string().trim().max(1000, "Keep the message under 1000 characters.").optional().or(z.literal("")),
+});
+
+export async function requestRecovery(_prev: FormState, formData: FormData): Promise<FormState> {
+  const ip = await clientIp();
+  const thanks =
+    "Thanks. An admin will look at your request and get back to you with a reset link. You can close this page.";
+
+  const limit = rateLimit(`recovery:${ip}`, RULES.recovery);
+  if (!limit.ok) {
+    await audit(null, "recovery.rate_limited", {
+      type: "recovery",
+      detail: "A recovery request was refused because the connection sent too many.",
+    });
+    return { error: retryMessage(limit.retryAfter) };
+  }
+
+  if (looksAutomated(formData)) {
+    await audit(null, "recovery.bot_blocked", {
+      type: "recovery",
+      detail: "A recovery request looked automated and was dropped.",
+    });
+    return { ok: thanks };
+  }
+
+  const parsed = recoverySchema.safeParse({
+    kind: formData.get("kind") ?? "PASSWORD",
+    contact: formData.get("contact") ?? "",
+    name: formData.get("name") ?? "",
+    message: formData.get("message") ?? "",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const d = parsed.data;
+
+  // Best-effort match so the admin sees who it probably is. Never revealed to
+  // the requester: the answer is the same whether or not anyone matched.
+  const contact = d.contact.includes("@") ? normalizeEmail(d.contact) : d.contact;
+  const match = await db.user.findFirst({
+    where: {
+      deletedAt: null,
+      OR: [
+        { email: contact },
+        { username: contact.toLowerCase() },
+        { name: d.name || contact },
+        { name: contact },
+      ],
+    },
+    select: { id: true },
+  });
+
+  const request = await db.recoveryRequest.create({
+    data: {
+      kind: d.kind,
+      contact: d.contact,
+      name: d.name || null,
+      message: d.message || null,
+      matchedUserId: match?.id ?? null,
+      ip: (await displayIp())?.slice(0, 64) ?? null,
+    },
+  });
+
+  const who = d.name || d.contact;
+  await audit(null, "recovery.requested", {
+    type: "recovery",
+    id: request.id,
+    detail: `${who} ${KIND_LABEL[d.kind]} and asked for help.${match ? "" : " No account matched what they typed."}`.slice(0, 1000),
+  });
+  await noticeAdmins(
+    `Account recovery: ${who} ${KIND_LABEL[d.kind]}`,
+    d.message || "No message.",
+    "/people?tab=requests",
   );
 
-  const pending = await db.invite.findMany({
-    where: {
-      email: { in: rows.map((row) => row.email) },
-      acceptedAt: null,
-      revokedAt: null,
-      expiresAt: { gt: new Date() },
+  return { ok: thanks };
+}
+
+export async function approveRecovery(_prev: LinkState, formData: FormData): Promise<LinkState> {
+  const viewer = await requireAdminViewer("approve an account recovery request");
+  const id = String(formData.get("id") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+
+  const req = await db.recoveryRequest.findUnique({ where: { id } });
+  if (!req || req.status !== "PENDING") return { error: "That request has already been handled." };
+  if (!userId) return { error: "Pick whose account this is first." };
+
+  const link = await issueResetFor(viewer, userId, `approved account recovery request from ${req.name || req.contact}`);
+  if ("error" in link) return { error: link.error };
+
+  const claimed = await db.recoveryRequest.updateMany({
+    where: { id, status: "PENDING" },
+    data: {
+      status: "APPROVED",
+      resolvedById: viewer.id,
+      resolvedAt: new Date(),
+      matchedUserId: userId,
+      resetId: link.resetId,
+      resolution: "Reset link issued.",
     },
-    select: { email: true },
   });
-  const alreadyInvited = new Set(pending.map((invite) => invite.email));
+  if (claimed.count === 0) return { error: "Somebody else handled that request a moment ago." };
 
-  const toCreate = rows.filter((row) => {
-    if (hasAccount.has(row.email)) {
-      skipped.push({ line: row.line, email: row.email, reason: "Already has an account." });
-      return false;
-    }
-    if (alreadyInvited.has(row.email)) {
-      skipped.push({ line: row.line, email: row.email, reason: "Already has a pending invite." });
-      return false;
-    }
-    if (row.departmentSlug) {
-      const id =
-        bySlug.get(row.departmentSlug.toLowerCase()) ?? byName.get(row.departmentSlug.toLowerCase());
-      if (!id) {
-        skipped.push({
-          line: row.line,
-          email: row.email,
-          reason: `No department called "${row.departmentSlug}".`,
-        });
-        return false;
-      }
-    }
-    return true;
+  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, username: true } });
+  await audit(viewer.id, "recovery.approved", {
+    type: "recovery",
+    id,
+    detail: `${displayName(viewer)} approved the recovery request from ${req.name || req.contact} and issued a reset link.`,
   });
 
-  if (toCreate.length === 0) {
-    return { error: "Every row was skipped — see the reasons below.", skipped: skipped.slice(0, 50) };
-  }
-
-  const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
-
-  await db.invite.createMany({
-    data: toCreate.map((row) => ({
-      email: row.email,
-      code: generateCode(),
-      name: row.name || null,
-      roleTitle: row.roleTitle || null,
-      tier: row.tier,
-      departmentId: row.departmentSlug
-        ? (bySlug.get(row.departmentSlug.toLowerCase()) ??
-          byName.get(row.departmentSlug.toLowerCase()) ??
-          null)
-        : null,
-      invitedById: viewer.id,
-      expiresAt,
-    })),
-  });
-
-  await audit(viewer.id, "people.imported", {
-    type: "invite",
-    detail: `${toCreate.length} invites, ${skipped.length} skipped`,
-  });
-
-  revalidatePath("/admin");
   revalidatePath("/people");
-
   return {
-    ok: `${toCreate.length} ${toCreate.length === 1 ? "invite" : "invites"} created. Copy the links from the admin panel and send them out.`,
-    created: toCreate.length,
-    skipped: skipped.slice(0, 50),
+    ok: `Approved. Send this link to ${req.contact}. Their email is ${user?.email ?? "unknown"}${user?.username ? `, username ${user.username}` : ""}.`,
+    url: link.url,
   };
+}
+
+export async function denyRecovery(_prev: FormState, formData: FormData): Promise<FormState> {
+  const viewer = await requireAdminViewer("deny an account recovery request");
+  const id = String(formData.get("id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 500) || "No reason given.";
+
+  const req = await db.recoveryRequest.findUnique({ where: { id } });
+  const claimed = await db.recoveryRequest.updateMany({
+    where: { id, status: "PENDING" },
+    data: { status: "DENIED", resolvedById: viewer.id, resolvedAt: new Date(), resolution: reason },
+  });
+  if (!req || claimed.count === 0) return { error: "That request has already been handled." };
+
+  await audit(viewer.id, "recovery.denied", {
+    type: "recovery",
+    id,
+    detail: `${displayName(viewer)} denied the recovery request from ${req.name || req.contact}. Reason: ${reason}`,
+  });
+  revalidatePath("/people");
+  return { ok: "Denied." };
+}
+
+/** Marks this viewer's recovery notices read once they open the Requests tab. */
+export async function markRecoveryNoticesRead(): Promise<void> {
+  const viewer = await requireViewer();
+  await db.portalNotice.updateMany({
+    where: { userId: viewer.id, readAt: null, href: "/people?tab=requests" },
+    data: { readAt: new Date() },
+  });
 }

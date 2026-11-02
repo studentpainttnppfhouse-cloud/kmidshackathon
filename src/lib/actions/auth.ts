@@ -12,6 +12,7 @@ import {
   normalizeEmail,
   passwordSchema,
   shouldLock,
+  usernameSchema,
   verifyPassword,
 } from "@/lib/auth";
 import { createSession, destroyCurrentSession } from "@/lib/session";
@@ -57,42 +58,51 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   // cannot see a password spray across many accounts, and is itself a way to
   // lock a colleague out on purpose.
   const limit = rateLimit(`login:${ip}`, RULES.login);
-  if (!limit.ok) return { error: retryMessage(limit.retryAfter) };
+  if (!limit.ok) {
+    await audit(null, "login.rate_limited", {
+      type: "user",
+      detail: "Sign-in refused: too many attempts from one connection.",
+    });
+    return { error: retryMessage(limit.retryAfter) };
+  }
 
   if (looksAutomated(formData)) {
     // Answer exactly like a wrong password: a bot that learns it was detected
     // is a bot that gets rewritten.
     await equalizeTiming("bot");
-    return { error: "That email and password do not match." };
+    return { error: "That email or username and password do not match." };
   }
 
-  const emailRaw = String(formData.get("email") ?? "");
+  // One field takes either the email or the username.
+  const identifier = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  const parsed = emailSchema.safeParse(emailRaw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
+  let user;
+  if (identifier.includes("@")) {
+    const parsed = emailSchema.safeParse(identifier);
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0].message };
+    }
+    user = await db.user.findUnique({ where: { email: parsed.data } });
+  } else {
+    const parsed = usernameSchema.safeParse(identifier);
+    user = parsed.success ? await db.user.findUnique({ where: { username: parsed.data } }) : null;
   }
-  const email = parsed.data;
-
-  const user = await db.user.findUnique({ where: { email } });
 
   // Same message whether the account is missing, has no password yet, or the
   // password is wrong — an attacker learns nothing about who works here.
-  const generic = "That email and password do not match.";
+  const generic = "That email or username and password do not match.";
 
   if (!user || !user.passwordHash || user.deletedAt || !user.isActive) {
     await equalizeTiming(password);
     await audit(user?.id ?? null, "login.failed", {
       type: "user",
       id: user?.id,
-      detail: `Sign-in attempt for ${email}`,
-      result: "failed",
-      reason: !user
-        ? "No account with that email"
+      detail: !user
+        ? `Sign-in failed: no account for "${identifier.slice(0, 120)}".`
         : !user.passwordHash
-          ? "Account has no password set yet"
-          : "Account is deactivated or deleted",
+          ? "Sign-in failed: the account has no password set yet."
+          : "Sign-in failed: the account is suspended or deleted.",
     });
     return { error: generic };
   }
@@ -277,6 +287,15 @@ export async function usePasswordReset(_prev: FormState, formData: FormData): Pr
   const stale = "This reset link is no longer valid. Ask an admin for a new one.";
   const reset = await db.passwordReset.findUnique({ where: { code } });
   if (!reset || reset.usedAt || reset.expiresAt.getTime() < Date.now()) {
+    await audit(reset?.userId ?? null, "password.reset.failed", {
+      type: "user",
+      id: reset?.userId,
+      detail: !reset
+        ? "Someone tried a reset link that does not exist."
+        : reset.usedAt
+          ? "Someone tried a reset link that was already used or replaced."
+          : "Someone tried an expired reset link.",
+    });
     return { error: stale };
   }
   if (!safeEqual(reset.code, code)) return { error: stale };
@@ -307,7 +326,11 @@ export async function usePasswordReset(_prev: FormState, formData: FormData): Pr
   clearRateLimit(`code:${ip}`);
 
   await createSession(reset.userId, await requestMeta());
-  await audit(reset.userId, "password.reset.used", { type: "user", id: reset.userId });
+  await audit(reset.userId, "password.reset.used", {
+    type: "user",
+    id: reset.userId,
+    detail: "Set a new password with a reset link; other sessions were signed out.",
+  });
 
   redirect("/dashboard");
 }

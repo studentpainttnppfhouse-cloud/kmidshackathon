@@ -7,13 +7,23 @@ import { MIN_PASSWORD_LENGTH } from "@/lib/constants";
 
 const initial: FormState = {};
 
-export function ResetForm({ code }: { code: string }) {
+export function ResetForm({ code, email }: { code: string; email: string }) {
   const [state, action] = useActionState(usePasswordReset, initial);
 
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="code" value={code} />
       <BotFields />
+      {/* Lets the password manager file the new password under the right account. */}
+      <input
+        type="email"
+        name="username"
+        autoComplete="username"
+        value={email}
+        readOnly
+        className="hs-input"
+        aria-label="Account"
+      />
 
       <PasswordField
         id="password"

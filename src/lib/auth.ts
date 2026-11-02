@@ -29,6 +29,13 @@ export const emailSchema = z
   .email("That is not a valid email address.")
   .refine(isAllowedEmail, `Sign-in is limited to @${ALLOWED_EMAIL_DOMAIN} addresses.`);
 
+/** Optional sign-in name: lowercase letters, digits, dot, dash, underscore. */
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9._-]{3,32}$/, "Usernames are 3 to 32 characters: letters, numbers, dot, dash or underscore.");
+
 export const passwordSchema = z
   .string()
   .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters.`)

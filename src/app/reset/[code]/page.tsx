@@ -8,7 +8,10 @@ export const metadata: Metadata = { title: "Reset password · Hackathon Studio" 
 
 export default async function ResetPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  const reset = await db.passwordReset.findUnique({ where: { code } });
+  const reset = await db.passwordReset.findUnique({
+    where: { code },
+    include: { user: { select: { email: true } } },
+  });
 
   if (!reset || reset.usedAt || reset.expiresAt.getTime() < Date.now()) {
     return (
@@ -26,7 +29,7 @@ export default async function ResetPage({ params }: { params: Promise<{ code: st
 
   return (
     <AuthShell title="Choose a new password" subtitle="One-time reset link">
-      <ResetForm code={reset.code} />
+      <ResetForm code={reset.code} email={reset.user.email} />
     </AuthShell>
   );
 }
