@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import {
   createAnnouncement,
+  updateAnnouncement,
   createFile,
   createForm,
   uploadFileAsset,
@@ -186,12 +187,18 @@ export function AnnouncementForm({
   departments,
   canBroadcast,
   defaultDepartmentId,
+  editing,
 }: {
   departments: Dept[];
   canBroadcast: boolean;
   defaultDepartmentId?: string;
+  /** Set to edit an existing announcement: only title, text and pin change. */
+  editing?: { id: string; title: string; body: string; pinned: boolean };
 }) {
-  const [state, action] = useActionState(createAnnouncement, initial);
+  const [state, action] = useActionState(
+    editing ? updateAnnouncement.bind(null, editing.id) : createAnnouncement,
+    initial,
+  );
 
   return (
     <form action={action} className="space-y-4">
@@ -199,16 +206,17 @@ export function AnnouncementForm({
         <label className="hs-label" htmlFor="ann-title">
           Title
         </label>
-        <input id="ann-title" name="title" required className="hs-input" />
+        <input id="ann-title" name="title" required className="hs-input" defaultValue={editing?.title} />
       </div>
 
       <div>
         <label className="hs-label" htmlFor="ann-body">
           Message
         </label>
-        <textarea id="ann-body" name="body" rows={4} required className="hs-input resize-y" />
+        <textarea id="ann-body" name="body" rows={editing ? 8 : 4} required className="hs-input resize-y" defaultValue={editing?.body} />
       </div>
 
+      {editing ? null : (
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="hs-label" htmlFor="ann-scope">
@@ -246,20 +254,17 @@ export function AnnouncementForm({
         </div>
       </div>
 
+      )}
+
       <label className="flex items-center gap-2 text-sm text-muted">
-        <input type="checkbox" name="pinned" className="accent-pink-500" />
+        <input type="checkbox" name="pinned" defaultChecked={editing?.pinned} className="accent-pink-500" />
         Pin to the top
       </label>
 
-      <label className="flex items-center gap-2 text-sm text-muted">
-        <input type="checkbox" name="toTeams" className="accent-pink-500" />
-        Also push this to Teams
-      </label>
-
-      <DraftKeeper formKey="announcement:new" />
+      {editing ? null : <DraftKeeper formKey="announcement:new" />}
       <Feedback state={state} />
       <SubmitButton className="hs-btn hs-btn-primary" pendingLabel="Posting…">
-        Post announcement
+        {editing ? "Save changes" : "Post announcement"}
       </SubmitButton>
     </form>
   );

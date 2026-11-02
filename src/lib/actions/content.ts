@@ -600,13 +600,61 @@ export async function createAnnouncement(_prev: FormState, formData: FormData): 
     authorId: viewer.id,
     authorName: viewer.nickname ?? viewer.name,
     pinned: Boolean(d.pinned),
-    force: Boolean(d.toTeams),
+    force: true,
   });
 
   revalidatePath("/announcements");
   revalidatePath("/dashboard");
   revalidatePath("/notifications");
   redirect("/announcements");
+}
+
+export async function updateAnnouncement(
+  id: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const viewer = await requireViewer();
+  const throttled = writeLimit(viewer);
+  if (throttled) return throttled;
+
+  const existing = await db.announcement.findUnique({
+    where: { id },
+    select: { departmentId: true, authorId: true, deletedAt: true },
+  });
+  if (!existing || existing.deletedAt) return { error: "That announcement no longer exists." };
+  if (!can(viewer, "update", { kind: "announcement", ...existing })) {
+    await audit(viewer.id, "announcement.update_denied", {
+      type: "announcement",
+      id,
+      detail: "Tried to edit an announcement they may not edit. Reason: only the author, the department head or an admin can edit it.",
+    });
+    return { error: "You can't edit this announcement." };
+  }
+
+  const parsed = z
+    .object({
+      title: z.string().trim().min(2, "Give the announcement a title.").max(200),
+      body: z.string().trim().min(2, "Write the announcement.").max(5000),
+      pinned: z.boolean(),
+    })
+    .safeParse({
+      title: formData.get("title") ?? "",
+      body: formData.get("body") ?? "",
+      pinned: formData.get("pinned") === "on",
+    });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  await db.announcement.update({ where: { id }, data: parsed.data });
+  await audit(viewer.id, "announcement.updated", {
+    type: "announcement",
+    id,
+    detail: "Edited the announcement title or text",
+  });
+
+  revalidatePath("/announcements");
+  revalidatePath("/dashboard");
+  redirect(`/announcements/${id}`);
 }
 
 export async function markAnnouncementRead(id: string): Promise<void> {
