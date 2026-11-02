@@ -1,3 +1,4 @@
+import { atLeast } from "@/lib/policy";
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/session";
 import { audit } from "@/lib/audit";
@@ -22,6 +23,9 @@ function validContents(value: unknown): value is Content[] {
 export async function POST(request: Request) {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  if (!atLeast(viewer, "T2_HEAD")) {
+    return NextResponse.json({ error: "The assistant is for department heads, admins and the owner." }, { status: 403 });
+  }
 
   const config = await getGeminiConfig();
   if (!config.apiKey) {

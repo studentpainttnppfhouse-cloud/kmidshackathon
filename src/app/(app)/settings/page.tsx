@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { isAdmin, requireViewer } from "@/lib/authorize";
+import { isAdmin, isOwner, requireViewer } from "@/lib/authorize";
 import { revokeSession } from "@/lib/actions/admin";
 import { pageMatrix } from "@/lib/page-access";
 import { ProfileForm } from "@/components/profile-form";
@@ -53,7 +53,7 @@ export default async function SettingsPage({
   const viewer = await requireViewer();
   const sp = await searchParams;
   const tab: TabKey = TABS.some((t) => t.key === sp.tab) ? (sp.tab as TabKey) : "account";
-  const canEditAccess = isAdmin(viewer);
+  const canEditAccess = isOwner(viewer);
 
   return (
     <div className="space-y-5">

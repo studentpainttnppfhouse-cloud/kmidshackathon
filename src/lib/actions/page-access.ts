@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { isAdmin, requireViewer } from "@/lib/authorize";
+import { isOwner, requireViewer } from "@/lib/authorize";
 import { RULES, rateLimit } from "@/lib/rate-limit";
 import {
   ACCESS_LEVEL_LABEL,
@@ -37,13 +37,13 @@ export async function setPageAccess(
   level: PageAccessLevel,
 ): Promise<void> {
   const viewer = await requireViewer();
-  if (!isAdmin(viewer)) {
+  if (!isOwner(viewer)) {
     await audit(viewer.id, "page.access.set", {
       type: "page",
       id: page,
       detail: `Tried to change ${page} for ${tier}`,
       result: "denied",
-      reason: "Only admins and the owner can edit page access",
+      reason: "Only the owner can edit page access",
     });
     return;
   }

@@ -67,7 +67,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (isAdmin(viewer) && sees("admin")) items.push({ href: "/admin", label: "Admin" });
   if (isAdmin(viewer) && sees("audit")) items.push({ href: "/admin/audit", label: "Audit log" });
-  items.push({ href: "/assistant", label: "Assistant" });
+  if (atLeast(viewer, "T2_HEAD")) items.push({ href: "/assistant", label: "Assistant" });
 
   return (
     <div className="hs-workspace lg:flex">

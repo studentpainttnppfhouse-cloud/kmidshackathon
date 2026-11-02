@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { isAdmin, requireViewer } from "@/lib/authorize";
+import { isAdmin, requireTier } from "@/lib/authorize";
 import { getGeminiConfig } from "@/lib/ai/config";
 import { AiChat } from "@/components/ai-chat";
 import { Banner, Card, PageHeader } from "@/components/ui";
@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Assistant" };
 export const dynamic = "force-dynamic";
 
 export default async function AssistantPage() {
-  const viewer = await requireViewer();
+  const viewer = await requireTier("T2_HEAD");
   const config = await getGeminiConfig();
 
   return (

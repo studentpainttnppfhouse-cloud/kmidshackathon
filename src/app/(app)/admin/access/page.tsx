@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireTier } from "@/lib/authorize";
+import { isOwner, requireTier } from "@/lib/authorize";
 import { pageMatrix } from "@/lib/page-access";
 import { AccessGrid } from "@/components/access-grid";
 import { Card, PageHeader } from "@/components/ui";
@@ -8,9 +8,9 @@ import { Card, PageHeader } from "@/components/ui";
 export const metadata: Metadata = { title: "Page access" };
 export const dynamic = "force-dynamic";
 
-/** The page-by-tier grid. Admins and the owner may edit it. */
+/** The page-by-tier grid. Only the owner may edit it. */
 export default async function PageAccessPage() {
-  await requireTier("T3_ADMIN");
+  const viewer = await requireTier("T3_ADMIN");
   const matrix = await pageMatrix();
 
   return (
@@ -25,7 +25,7 @@ export default async function PageAccessPage() {
         }
       />
       <Card>
-        <AccessGrid matrix={matrix} />
+        <AccessGrid readOnly={!isOwner(viewer)} matrix={matrix} />
       </Card>
     </div>
   );
