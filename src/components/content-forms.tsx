@@ -5,7 +5,6 @@ import {
   createAnnouncement,
   updateAnnouncement,
   createFile,
-  createForm,
   uploadFileAsset,
 } from "@/lib/actions/content";
 import type { FormState } from "@/lib/actions/auth";
@@ -270,82 +269,3 @@ export function AnnouncementForm({
   );
 }
 
-export function FormRecordForm({ departments }: { departments: Dept[] }) {
-  const [state, action] = useActionState(createForm, initial);
-
-  return (
-    <form action={action} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="hs-label" htmlFor="form-title">
-            Form name
-          </label>
-          <input
-            id="form-title"
-            name="title"
-            required
-            className="hs-input"
-            placeholder="Staff Application 2027"
-          />
-        </div>
-        <div>
-          <label className="hs-label" htmlFor="form-type">
-            Type
-          </label>
-          <select id="form-type" name="type" defaultValue="external" className="hs-input">
-            <option value="external">External (Google Forms)</option>
-            <option value="internal">Internal (tracked here)</option>
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label className="hs-label" htmlFor="form-url">
-          Form link
-        </label>
-        <input id="form-url" name="url" type="url" className="hs-input" placeholder="https://forms.gle/…" />
-      </div>
-
-      <div>
-        <label className="hs-label" htmlFor="form-responses">
-          Responses sheet link
-        </label>
-        <input id="form-responses" name="responseUrl" type="url" className="hs-input" />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="hs-label" htmlFor="form-dept">
-            Department
-          </label>
-          <select id="form-dept" name="departmentId" className="hs-input">
-            <option value="">Portal-wide</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="hs-label" htmlFor="form-deadline">
-            Deadline
-          </label>
-          <input id="form-deadline" name="deadline" type="date" className="hs-input" />
-        </div>
-      </div>
-
-      <div>
-        <label className="hs-label" htmlFor="form-desc">
-          Description
-        </label>
-        <textarea id="form-desc" name="description" rows={2} className="hs-input resize-y" />
-      </div>
-
-      <Feedback state={state} />
-      <SubmitButton className="hs-btn hs-btn-primary" pendingLabel="Adding…">
-        Add form
-      </SubmitButton>
-    </form>
-  );
-}

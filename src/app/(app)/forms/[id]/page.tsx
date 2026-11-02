@@ -4,7 +4,10 @@ import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
 import { setFormOpen } from "@/lib/actions/forms";
-import { answerText, isUpload, parseDefinition, type ResponsePayload } from "@/lib/forms-schema";
+import { answerText, isPublicForm, isUpload, parseDefinition, type ResponsePayload } from "@/lib/forms-schema";
+import { appOrigin } from "@/lib/request";
+import { FormShare } from "@/components/form-share";
+import { QrCode } from "@/components/qr";
 import { MAX_UPLOAD_BYTES } from "@/lib/attachments";
 import { FormFill, type StoredFile } from "@/components/form-fill";
 import { Banner, LastUpdated } from "@/components/ui";
@@ -34,6 +37,8 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
   const definition = parseDefinition(form.schema);
 
   if (form.type !== "internal") notFound();
+  const isPublic = isPublicForm(definition);
+  const shareUrl = `${await appOrigin()}/f/${form.id}`;
 
   const mine = await db.formResponse.findFirst({
     where: { formId: form.id, userId: viewer.id },
@@ -65,6 +70,11 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
         </Link>
         {manages ? (
           <div className="flex flex-wrap items-center gap-2">
+            <FormShare
+              url={shareUrl}
+              isPublic={isPublic}
+              qr={<QrCode value={shareUrl} size={160} title={`QR code for ${form.title}`} />}
+            />
             <Link href={`/forms/${form.id}/responses`} className="hs-btn hs-btn-secondary px-3 py-1.5 text-xs">
               Responses · {responseCount}
             </Link>
@@ -87,6 +97,7 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
 
       <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2">
         <span className="text-xs text-faint">{form.department?.name ?? "Portal-wide"}</span>
+        <span className="hs-pill bg-tint text-brand-deep">{isPublic ? "Anyone with the link" : "Staff only"}</span>
         <span className={`hs-pill ${closed ? "bg-neutral-soft text-neutral-strong" : "bg-ok-soft text-ok-strong"}`}>
           {closed ? "Closed" : "Open"}
         </span>
@@ -134,6 +145,8 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
           existing={mine ? (mine.payload as ResponsePayload) : null}
           existingFiles={existingFiles}
           maxBytes={MAX_UPLOAD_BYTES}
+          askEmail={isPublic}
+          lockedEmail={viewer.email}
         />
       )}
 

@@ -691,62 +691,6 @@ export async function deleteAnnouncement(id: string): Promise<void> {
 // The question schema and the responses live in src/lib/actions/forms.ts.
 // ---------------------------------------------------------------------------
 
-const formSchema = z.object({
-  title: z.string().trim().min(2, "Name the form.").max(200),
-  description: z.string().trim().max(1000).optional().or(z.literal("")),
-  type: z.enum(["internal", "external"]),
-  url: optionalUrlSchema,
-  responseUrl: optionalUrlSchema,
-  departmentId: z.string().optional().or(z.literal("")),
-  deadline: z.string().max(20).optional().or(z.literal("")),
-});
-
-export async function createForm(_prev: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await requireViewer();
-  const throttled = writeLimit(viewer);
-  if (throttled) return throttled;
-
-  const parsed = formSchema.safeParse({
-    title: formData.get("title") ?? "",
-    description: formData.get("description") ?? "",
-    type: formData.get("type") ?? "external",
-    url: formData.get("url") ?? "",
-    responseUrl: formData.get("responseUrl") ?? "",
-    departmentId: formData.get("departmentId") ?? "",
-    deadline: formData.get("deadline") ?? "",
-  });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const d = parsed.data;
-
-  const departmentId = d.departmentId || null;
-  if (departmentId && !(await assertDepartmentExists(departmentId))) {
-    return { error: "That department no longer exists." };
-  }
-
-  assertCan(viewer, "create", { kind: "form", departmentId, ownerId: viewer.id });
-
-  if (d.type === "external" && !d.url) {
-    return { error: "An external form needs its link." };
-  }
-
-  const created = await db.form.create({
-    data: {
-      title: d.title,
-      description: d.description || null,
-      type: d.type,
-      url: d.url || null,
-      responseUrl: d.responseUrl || null,
-      departmentId,
-      ownerId: viewer.id,
-      deadline: d.deadline ? new Date(`${d.deadline}T23:59:59+07:00`) : null,
-    },
-  });
-
-  await audit(viewer.id, "form.created", { type: "form", id: created.id, detail: d.title });
-  revalidatePath("/forms");
-  redirect("/forms");
-}
-
 export async function deleteForm(id: string): Promise<void> {
   const viewer = await requireViewer();
   const f = await db.form.findUnique({

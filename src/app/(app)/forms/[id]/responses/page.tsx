@@ -57,7 +57,16 @@ export default async function FormResponsesPage({ params }: { params: Promise<{ 
       <PageHeader
         eyebrow="Responses"
         title={form.title}
-        action={<span className="hs-pill bg-tint text-brand-deep">{responses.length} responses</span>}
+        action={
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="hs-pill bg-tint text-brand-deep">{responses.length} responses</span>
+            {responses.length > 0 ? (
+              <a href={`/api/forms/${form.id}/export`} className="hs-btn hs-btn-secondary px-3 py-1.5 text-xs">
+                Export CSV
+              </a>
+            ) : null}
+          </span>
+        }
       />
 
       {!definition ? (
@@ -71,6 +80,9 @@ export default async function FormResponsesPage({ params }: { params: Promise<{ 
               <tr className="border-b border-line text-left">
                 <th scope="col" className="hs-eyebrow sticky left-0 bg-surface-2 px-3 py-2">
                   Who
+                </th>
+                <th scope="col" className="hs-eyebrow px-3 py-2">
+                  Email
                 </th>
                 {definition.questions.map((question) => (
                   <th key={question.id} scope="col" className="hs-eyebrow min-w-[10rem] px-3 py-2">
@@ -93,16 +105,17 @@ export default async function FormResponsesPage({ params }: { params: Promise<{ 
                     <td className="sticky left-0 bg-surface px-3 py-2.5">
                       <span className="flex items-center gap-2">
                         <Avatar
-                          name={response.user?.name ?? "Unknown"}
+                          name={response.user?.name ?? response.respondentEmail ?? "Guest"}
                           nickname={response.user?.nickname}
                           url={response.user?.avatarUrl}
                           size={22}
                         />
                         <span className="truncate">
-                          {response.user?.nickname || response.user?.name || "Unknown"}
+                          {response.user?.nickname || response.user?.name || "Guest"}
                         </span>
                       </span>
                     </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-muted">{response.respondentEmail ?? "—"}</td>
                     {definition.questions.map((question) => {
                       if (isUpload(question.type)) {
                         const ids = Array.isArray(payload[question.id]) ? (payload[question.id] as string[]) : [];

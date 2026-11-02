@@ -81,6 +81,7 @@ export function FormFill({
             <p className="text-lg font-semibold text-ink">
               {definition.confirmation || state.ok}
             </p>
+            {askEmail && !lockedEmail ? null : (
             <button
               type="button"
               onClick={() => {
@@ -91,6 +92,7 @@ export function FormFill({
             >
               Edit my answers
             </button>
+            )}
           </div>
         ) : !emailConfirmed ? (
           <form
@@ -137,7 +139,7 @@ export function FormFill({
             key={version}
             action={action}
             onSubmit={() => setEditing(false)}
-            className="mt-6 space-y-6"
+            className="relative mt-6 space-y-6"
           >
             <input type="hidden" name="formId" value={formId} />
             <input type="hidden" name="form_rendered_at" value={renderedAt} />
