@@ -3,12 +3,12 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
-import { deleteFormResponse, setFormOpen } from "@/lib/actions/forms";
-import { answerText, parseDefinition, type ResponsePayload } from "@/lib/forms-schema";
-import { FormFill } from "@/components/form-fill";
-import { ConfirmDelete } from "@/components/confirm-delete";
-import { Avatar, Banner, Card, EmptyState, LastUpdated, PageHeader, SectionTitle } from "@/components/ui";
-import { formatDateLong, formatDateTime } from "@/lib/dates";
+import { setFormOpen } from "@/lib/actions/forms";
+import { answerText, isUpload, parseDefinition, type ResponsePayload } from "@/lib/forms-schema";
+import { MAX_UPLOAD_BYTES } from "@/lib/attachments";
+import { FormFill, type StoredFile } from "@/components/form-fill";
+import { Banner, LastUpdated } from "@/components/ui";
+import { formatDateLong } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Form" };
 export const dynamic = "force-dynamic";
@@ -33,202 +33,114 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
   const manages = can(viewer, "update", resource);
   const definition = parseDefinition(form.schema);
 
-  // Responses are other people's answers. Only whoever runs the form sees the
-  // table; everybody else sees their own submission and nothing more.
-  const responses = await db.formResponse.findMany({
-    where: manages ? { formId: form.id } : { formId: form.id, userId: viewer.id },
-    include: { user: { select: { id: true, name: true, nickname: true, avatarUrl: true } } },
-    orderBy: { submittedAt: "desc" },
-    take: manages ? 500 : 1,
-  });
+  if (form.type !== "internal") notFound();
 
-  const mine = responses.find((r) => r.userId === viewer.id);
+  const mine = await db.formResponse.findFirst({
+    where: { formId: form.id, userId: viewer.id },
+    select: { id: true, payload: true },
+  });
+  const responseCount = manages ? await db.formResponse.count({ where: { formId: form.id } }) : 0;
   const closed = !form.isOpen || (form.deadline !== null && form.deadline.getTime() < Date.now());
+
+  // Files the viewer already sent, so the upload fields can show them.
+  const existingFiles: Record<string, StoredFile[]> = {};
+  if (mine && definition) {
+    const payload = mine.payload as ResponsePayload;
+    const rows = await db.attachment.findMany({
+      where: { parentType: "form_response", parentId: mine.id, deletedAt: null },
+      select: { id: true, name: true, mimeType: true, size: true },
+    });
+    for (const question of definition.questions) {
+      const ids = payload[question.id];
+      if (!isUpload(question.type) || !Array.isArray(ids)) continue;
+      existingFiles[question.id] = rows.filter((row) => ids.includes(row.id));
+    }
+  }
 
   return (
     <div className="hs-enter space-y-5">
-      <Link href="/forms" className="hs-no-print text-sm font-semibold text-brand-deep">
-        ← All forms
-      </Link>
+      <div className="hs-no-print flex flex-wrap items-center justify-between gap-2">
+        <Link href="/forms" className="text-sm font-semibold text-brand-deep">
+          ← All forms
+        </Link>
+        {manages ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/forms/${form.id}/responses`} className="hs-btn hs-btn-secondary px-3 py-1.5 text-xs">
+              Responses · {responseCount}
+            </Link>
+            <Link href={`/forms/${form.id}/edit`} className="hs-btn hs-btn-secondary px-3 py-1.5 text-xs">
+              Edit form
+            </Link>
+            <form
+              action={async () => {
+                "use server";
+                await setFormOpen(form.id, !form.isOpen);
+              }}
+            >
+              <button type="submit" className="hs-btn hs-btn-ghost px-3 py-1.5 text-xs">
+                {form.isOpen ? "Close form" : "Reopen"}
+              </button>
+            </form>
+          </div>
+        ) : null}
+      </div>
 
-      <PageHeader
-        eyebrow={form.department?.name ?? "Portal-wide"}
-        title={form.title}
-        subtitle={form.description ?? undefined}
-        action={
-          manages && form.type === "internal" ? (
-            <>
-              <Link href={`/forms/${form.id}/edit`} className="hs-btn hs-btn-secondary">
-                Edit questions
-              </Link>
-              <form
-                action={async () => {
-                  "use server";
-                  await setFormOpen(form.id, !form.isOpen);
-                }}
-              >
-                <button type="submit" className="hs-btn hs-btn-ghost">
-                  {form.isOpen ? "Close the form" : "Reopen"}
-                </button>
-              </form>
-            </>
-          ) : null
-        }
-      />
-
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2">
+        <span className="text-xs text-faint">{form.department?.name ?? "Portal-wide"}</span>
         <span className={`hs-pill ${closed ? "bg-neutral-soft text-neutral-strong" : "bg-ok-soft text-ok-strong"}`}>
           {closed ? "Closed" : "Open"}
         </span>
         {form.deadline ? (
-          <span className="hs-pill bg-warn-soft text-warn-strong">
-            Closes {formatDateLong(form.deadline)}
-          </span>
-        ) : null}
-        {manages ? (
-          <span className="hs-pill bg-tint text-brand-deep">
-            {responses.length} {responses.length === 1 ? "response" : "responses"}
-          </span>
+          <span className="hs-pill bg-warn-soft text-warn-strong">Closes {formatDateLong(form.deadline)}</span>
         ) : null}
       </div>
 
-      {form.type !== "internal" ? (
-        <Banner tone="info">
-          This is an external form — the questions and the answers live in Google. Open it from the
-          forms index.
-        </Banner>
-      ) : !definition ? (
+      {!definition ? (
         <Banner tone="warn">
           This form has no questions saved. {manages ? "Edit it to add some." : "Ask its owner to finish it."}
         </Banner>
       ) : closed ? (
-        <Card>
-          <SectionTitle>Not accepting answers</SectionTitle>
-          <p className="text-sm text-muted">
+        <div className="hs-card mx-auto max-w-2xl p-5 sm:p-8">
+          <h1 className="text-2xl font-bold text-ink">{form.title}</h1>
+          <p className="mt-2 text-sm text-muted">
             {form.deadline && form.deadline.getTime() < Date.now()
-              ? `The deadline passed on ${formatDateLong(form.deadline)}.`
-              : "The person running this form has closed it."}
+              ? `Not accepting answers. The deadline passed on ${formatDateLong(form.deadline)}.`
+              : "Not accepting answers. The person running this form has closed it."}
           </p>
           {mine ? (
-            <div className="mt-4">
-              <h3 className="hs-eyebrow mb-2">What you answered</h3>
-              <AnswerList
-                definition={definition}
-                payload={mine.payload as ResponsePayload}
-              />
+            <div className="mt-5">
+              <h2 className="hs-eyebrow mb-2">What you answered</h2>
+              <dl className="space-y-2 text-sm">
+                {definition.questions.map((question) => (
+                  <div key={question.id}>
+                    <dt className="text-xs font-semibold text-faint">{question.label}</dt>
+                    <dd className="text-muted">
+                      {isUpload(question.type)
+                        ? (existingFiles[question.id] ?? []).map((f) => f.name).join(", ") || "—"
+                        : answerText(mine.payload as ResponsePayload, question) || "—"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           ) : null}
-        </Card>
+        </div>
       ) : (
         <FormFill
           formId={form.id}
+          title={form.title}
+          description={form.description}
           definition={definition}
           existing={mine ? (mine.payload as ResponsePayload) : null}
+          existingFiles={existingFiles}
+          maxBytes={MAX_UPLOAD_BYTES}
         />
       )}
 
-      {manages && definition && form.type === "internal" ? (
-        <Card>
-          <SectionTitle
-            action={
-              <span className="text-xs text-faint">
-                Visible to you as the form owner, and to admins.
-              </span>
-            }
-          >
-            Responses
-          </SectionTitle>
-
-          {responses.length === 0 ? (
-            <EmptyState title="Nobody has answered yet" hint="Share the link and check back." />
-          ) : (
-            <div className="-mx-1 overflow-x-auto">
-              <table className="w-full min-w-[40rem] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left">
-                    <th scope="col" className="hs-eyebrow px-2 py-2">
-                      Who
-                    </th>
-                    {definition.questions.map((question) => (
-                      <th key={question.id} scope="col" className="hs-eyebrow px-2 py-2">
-                        {question.label}
-                      </th>
-                    ))}
-                    <th scope="col" className="hs-eyebrow px-2 py-2">
-                      When
-                    </th>
-                    <th scope="col" className="sr-only">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {responses.map((response) => (
-                    <tr key={response.id} className="border-b border-line last:border-0">
-                      <td className="px-2 py-2.5">
-                        <span className="flex items-center gap-2">
-                          <Avatar
-                            name={response.user?.name ?? "Unknown"}
-                            nickname={response.user?.nickname}
-                            url={response.user?.avatarUrl}
-                            size={22}
-                          />
-                          <span className="truncate">
-                            {response.user?.nickname || response.user?.name || "Unknown"}
-                          </span>
-                        </span>
-                      </td>
-                      {definition.questions.map((question) => (
-                        <td key={question.id} className="px-2 py-2.5 align-top text-muted">
-                          {answerText(response.payload as ResponsePayload, question) || "—"}
-                        </td>
-                      ))}
-                      <td className="whitespace-nowrap px-2 py-2.5 text-xs text-faint">
-                        {formatDateTime(response.submittedAt)}
-                      </td>
-                      <td className="px-2 py-2.5">
-                        <ConfirmDelete
-                          action={async () => {
-                            "use server";
-                            await deleteFormResponse(response.id);
-                          }}
-                          label="Remove"
-                          title="Remove this response?"
-                          body="It is deleted for good — responses are not soft-deleted."
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4 text-xs text-faint">
+      <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-3 pt-2 text-xs text-faint">
         <span>Run by {form.owner.nickname || form.owner.name}</span>
         <LastUpdated at={form.updatedAt} />
       </div>
     </div>
-  );
-}
-
-function AnswerList({
-  definition,
-  payload,
-}: {
-  definition: NonNullable<ReturnType<typeof parseDefinition>>;
-  payload: ResponsePayload;
-}) {
-  return (
-    <dl className="space-y-2 text-sm">
-      {definition.questions.map((question) => (
-        <div key={question.id}>
-          <dt className="text-xs font-semibold text-faint">{question.label}</dt>
-          <dd className="text-muted">{answerText(payload, question) || "—"}</dd>
-        </div>
-      ))}
-    </dl>
   );
 }

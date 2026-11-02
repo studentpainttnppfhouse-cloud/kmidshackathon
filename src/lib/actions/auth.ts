@@ -83,10 +83,28 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
 
   if (!user || !user.passwordHash || user.deletedAt || !user.isActive) {
     await equalizeTiming(password);
+    await audit(user?.id ?? null, "login.failed", {
+      type: "user",
+      id: user?.id,
+      detail: `Sign-in attempt for ${email}`,
+      result: "failed",
+      reason: !user
+        ? "No account with that email"
+        : !user.passwordHash
+          ? "Account has no password set yet"
+          : "Account is deactivated or deleted",
+    });
     return { error: generic };
   }
 
   if (isLockedOut(user)) {
+    await audit(user.id, "login.failed", {
+      type: "user",
+      id: user.id,
+      detail: `Sign-in attempt for ${email}`,
+      result: "denied",
+      reason: "Account is temporarily locked after too many wrong passwords",
+    });
     return {
       error: `Too many attempts. Try again in ${minutesRemaining(user.lockedUntil!)} minutes, or ask an admin to unlock the account.`,
     };
@@ -103,7 +121,13 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
         lockedUntil: lock ? lockoutUntil() : user.lockedUntil,
       },
     });
-    await audit(user.id, "login.failed", { type: "user", id: user.id });
+    await audit(user.id, "login.failed", {
+      type: "user",
+      id: user.id,
+      detail: `Sign-in attempt for ${email}`,
+      result: "failed",
+      reason: lock ? "Wrong password — account now locked" : "Wrong password",
+    });
     if (lock) {
       return {
         error: `That is ${MAX_FAILED_LOGINS} failed attempts — the account is locked for 15 minutes.`,
@@ -312,6 +336,13 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
   if (!pw.success) return { error: pw.error.issues[0].message };
 
   if (!viewer.passwordHash || !(await verifyPassword(current, viewer.passwordHash))) {
+    await audit(viewer.id, "password.change.failed", {
+      type: "user",
+      id: viewer.id,
+      detail: "Tried to change password",
+      result: "failed",
+      reason: "Current password was wrong",
+    });
     return { error: "Your current password is not right." };
   }
 

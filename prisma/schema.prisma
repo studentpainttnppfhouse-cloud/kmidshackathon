@@ -32,6 +32,8 @@ model User {
   id           String  @id @default(cuid())
   email        String  @unique
   passwordHash String? @db.VarChar(255)
+  /// Optional short sign-in name, an alternative to the email at login.
+  username     String? @unique @db.VarChar(64)
 
   name      String
   nickname  String?
@@ -87,6 +89,8 @@ model User {
   teamsIdentity     TeamsIdentity?
   notificationsGot  NotificationJob[]    @relation("NotificationRecipient")
   notificationsSent NotificationJob[]    @relation("NotificationCreatedBy")
+  passkeys          Passkey[]
+  portalNotices     PortalNotice[]
 
   @@index([departmentId])
   @@index([tier])
@@ -505,12 +509,16 @@ model AuditLog {
   targetType String?  @db.VarChar(32)
   targetId   String?
   detail     String?  @db.Text
+  /// success | failed | denied
+  result     String   @default("success") @db.VarChar(16)
+  reason     String?  @db.Text
   createdAt  DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([action])
+  @@index([result])
   @@index([createdAt])
   @@map("audit_log")
 }
@@ -943,4 +951,90 @@ model PageAccess {
 
   @@id([page, tier])
   @@map("page_access")
+}
+
+// ---------------------------------------------------------------------------
+// Passkeys, account recovery, in-portal notices (people workstream)
+// ---------------------------------------------------------------------------
+
+/// A WebAuthn credential. Only the public key is stored.
+model Passkey {
+  id           String    @id @default(cuid())
+  userId       String
+  credentialId String    @unique @db.VarChar(512)
+  publicKey    Bytes     @db.Blob
+  counter      Int       @default(0)
+  transports   String?   @db.VarChar(191)
+  deviceType   String?   @db.VarChar(32)
+  backedUp     Boolean   @default(false)
+  label        String    @default("Passkey") @db.VarChar(80)
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("passkeys")
+}
+
+enum RecoveryKind {
+  USERNAME
+  PASSWORD
+  EMAIL
+  OTHER
+}
+
+enum RecoveryStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+/// "I forgot my username / password / email" from the public form. An admin
+/// or owner approves it (which issues a reset link) or denies it.
+model RecoveryRequest {
+  id            String         @id @default(cuid())
+  kind          RecoveryKind   @default(PASSWORD)
+  contact       String         @db.VarChar(191)
+  name          String?        @db.VarChar(120)
+  message       String?        @db.Text
+  matchedUserId String?
+  status        RecoveryStatus @default(PENDING)
+  resolvedById  String?
+  resolvedAt    DateTime?
+  resolution    String?        @db.Text
+  resetId       String?
+  ip            String?        @db.VarChar(64)
+  createdAt     DateTime       @default(now())
+
+  @@index([status])
+  @@index([matchedUserId])
+  @@map("recovery_requests")
+}
+
+/// A plain in-portal notice for one person (no Teams involved).
+model PortalNotice {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String    @db.VarChar(191)
+  body      String?   @db.Text
+  href      String?   @db.VarChar(255)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@map("portal_notices")
+}
+
+/// An uploaded profile picture. Kept out of `users` so the session lookup,
+/// which loads the whole user row, never drags image bytes along.
+model AvatarImage {
+  userId    String   @id
+  mime      String   @db.VarChar(32)
+  bytes     Bytes    @db.MediumBlob
+  updatedAt DateTime @updatedAt
+
+  @@map("avatar_images")
 }

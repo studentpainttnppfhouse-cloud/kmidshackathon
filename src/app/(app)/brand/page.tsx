@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireViewer, can } from "@/lib/authorize";
 import { deleteBrandToken } from "@/lib/actions/brand";
-import { assetLinks } from "@/lib/attachment-access";
+import { AssetsSection } from "./assets";
 import { ColorForm, FontForm, RampForm } from "@/components/brand-forms";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { CopyButton } from "@/components/chrome";
@@ -17,7 +16,7 @@ import {
   SectionTitle,
 } from "@/components/ui";
 
-export const metadata: Metadata = { title: "Brand Kit" };
+export const metadata: Metadata = { title: "Brand kit" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -51,19 +50,15 @@ const TYPE_SCALE = [
   { label: "Caption", size: "12px", weight: 600 },
 ];
 
-export default async function BrandPage() {
+export default async function BrandPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; dept?: string; tag?: string }>;
+}) {
   const viewer = await requireViewer();
+  const { q, dept, tag } = await searchParams;
 
-  const [assets, tokens] = await Promise.all([
-    db.fileAsset.findMany({
-      where: { deletedAt: null, isBrandKit: true },
-      include: { department: { select: { name: true } } },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.brandToken.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] }),
-  ]);
-
-  const assetHrefs = await assetLinks(assets);
+  const tokens = await db.brandToken.findMany({ orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] });
 
   const canEdit = can(viewer, "manage_departments", { kind: "system" });
 
@@ -84,9 +79,8 @@ export default async function BrandPage() {
   return (
     <div className="hs-enter space-y-5">
       <PageHeader
-        eyebrow="Brand Kit"
-        title="Hackathon Studio — Brand Kit 2027"
-        subtitle="So nobody has to ask “what pink again?”"
+        eyebrow="Shared resources"
+        title="Brand kit"
         action={
           <a href="/brand/export" className="hs-btn hs-btn-secondary hs-no-print">
             Export as PDF
@@ -267,45 +261,7 @@ export default async function BrandPage() {
         </ul>
       </Card>
 
-      <Card>
-        <SectionTitle
-          action={
-            <Link href="/files/new" className="text-sm font-semibold text-brand-deep">
-              Add an asset
-            </Link>
-          }
-        >
-          Logos, templates & assets
-        </SectionTitle>
-        {assets.length === 0 ? (
-          <EmptyState
-            title="No brand assets yet"
-            hint='Add them from Files & Assets and tick "Show this in the Brand Kit".'
-          />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {assets.map((asset) => {
-              const link = assetHrefs.get(asset.id);
-
-              return (
-                <a
-                  key={asset.id}
-                  href={link?.href ?? "#"}
-                  {...(link?.external ? { target: "_blank", rel: "noreferrer noopener" } : {})}
-                  className="rounded-xl border border-line p-3 transition hover:border-brand"
-                >
-                  <span className="hs-pill bg-tint text-brand-deep">{asset.kind}</span>
-                  <span className="mt-1.5 block text-sm font-bold text-ink">
-                    {asset.name}
-                    {link?.external ? " ↗" : ""}
-                  </span>
-                  <span className="block text-[11px] text-faint">{asset.department.name}</span>
-                </a>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+      <AssetsSection viewer={viewer} q={q} dept={dept} tag={tag} />
 
       <LastUpdated at={lastChanged} label="Palette last changed" />
     </div>
