@@ -3,21 +3,14 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requirePageAccess, can } from "@/lib/authorize";
 import { FormBuilder } from "@/components/form-builder";
-import { FormRecordForm } from "@/components/content-forms";
-import { Card, PageHeader, SectionTitle } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "New form" };
 export const dynamic = "force-dynamic";
 
-export default async function NewFormPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ kind?: string }>;
-}) {
+export default async function NewFormPage() {
   // A composer, not a page: a tier held at Read on forms never reaches it.
   const viewer = await requirePageAccess("forms", "edit");
-  const { kind } = await searchParams;
-  const external = kind === "external";
 
   const departments = await db.department.findMany({ orderBy: { sortOrder: "asc" } });
 
@@ -48,48 +41,14 @@ export default async function NewFormPage({
     <div className="hs-enter space-y-5">
       <PageHeader
         eyebrow="Forms"
-        title={external ? "Track an external form" : "Build a form"}
-        subtitle={
-          external
-            ? "For a Google Form that already exists. The portal keeps the link, the owner and the deadline."
-            : "Questions, answers and responses, all inside the portal. Nothing leaves for Google."
-        }
+        title="Build a form"
         action={
           <Link href="/forms" className="hs-btn hs-btn-ghost">
             Cancel
           </Link>
         }
       />
-
-      <div className="flex flex-wrap gap-1.5">
-        <Link
-          href="/forms/new"
-          aria-current={!external ? "page" : undefined}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-            !external ? "bg-brand-solid text-on-brand" : "bg-surface text-muted hover:text-brand-deep"
-          }`}
-        >
-          Build it here
-        </Link>
-        <Link
-          href="/forms/new?kind=external"
-          aria-current={external ? "page" : undefined}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-            external ? "bg-brand-solid text-on-brand" : "bg-surface text-muted hover:text-brand-deep"
-          }`}
-        >
-          Link a Google Form
-        </Link>
-      </div>
-
-      {external ? (
-        <Card>
-          <SectionTitle>External form</SectionTitle>
-          <FormRecordForm departments={creatable.map((d) => ({ id: d.id, name: d.name }))} />
-        </Card>
-      ) : (
-        <FormBuilder departments={creatable.map((d) => ({ id: d.id, name: d.name }))} />
-      )}
+      <FormBuilder departments={creatable.map((d) => ({ id: d.id, name: d.name }))} />
     </div>
   );
 }

@@ -37,7 +37,16 @@ export async function setPageAccess(
   level: PageAccessLevel,
 ): Promise<void> {
   const viewer = await requireViewer();
-  if (!isOwner(viewer)) return;
+  if (!isOwner(viewer)) {
+    await audit(viewer.id, "page.access.set", {
+      type: "page",
+      id: page,
+      detail: `Tried to change ${page} for ${tier}`,
+      result: "denied",
+      reason: "Only the owner can edit page access",
+    });
+    return;
+  }
   if (!isPageKey(page) || !isAccessLevel(level)) return;
   if (!TIERS.includes(tier)) return;
 
@@ -67,7 +76,7 @@ export async function setPageAccess(
   await audit(viewer.id, "page.access.set", {
     type: "page",
     id: page,
-    detail: `${tier} → ${ACCESS_LEVEL_LABEL[value]}`,
+    detail: `${PAGE_BY_KEY[page].label}: ${tier} → ${ACCESS_LEVEL_LABEL[value]}`,
   });
 
   // The navigation is built from this grid, so every page in the app has to be
@@ -75,4 +84,5 @@ export async function setPageAccess(
   revalidatePath("/", "layout");
   revalidatePath(PAGE_BY_KEY[page].href);
   revalidatePath("/admin/access");
+  revalidatePath("/settings");
 }

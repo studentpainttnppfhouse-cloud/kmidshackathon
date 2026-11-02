@@ -28,12 +28,42 @@ import type { PageMatrix } from "@/lib/page-access";
  * one cell is one decision, and batching eighty of them behind a button just
  * means losing them all to a closed tab.
  */
-export function AccessGrid({ matrix }: { matrix: PageMatrix }) {
+/** Workspace sections the grid is grouped into. Unknown pages land in "Other". */
+const SECTIONS: { title: string; keys: string[] }[] = [
+  { title: "Home", keys: ["dashboard", "notifications", "search"] },
+  { title: "Work", keys: ["assignments", "departments", "people", "event", "forms"] },
+  { title: "Content", keys: ["documents", "files", "brand", "announcements"] },
+  { title: "Administration", keys: ["admin", "audit"] },
+  { title: "Account", keys: ["settings", "help"] },
+];
+
+function groupPages() {
+  const used = new Set<string>();
+  const groups = SECTIONS.map((section) => {
+    const pages = PORTAL_PAGES.filter((p) => section.keys.includes(p.key));
+    pages.forEach((p) => used.add(p.key));
+    return { title: section.title, pages };
+  });
+  const rest = PORTAL_PAGES.filter((p) => !used.has(p.key));
+  if (rest.length) groups.push({ title: "Other", pages: rest });
+  return groups.filter((g) => g.pages.length > 0);
+}
+
+export function AccessGrid({
+  matrix,
+  readOnly = false,
+}: {
+  matrix: PageMatrix;
+  /** Shown to people who may look but not change anything. */
+  readOnly?: boolean;
+}) {
   const [draft, setDraft] = useState(matrix);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState<string | null>(null);
+  const groups = groupPages();
 
   function choose(page: PageKey, tier: Tier, level: PageAccessLevel) {
+    if (readOnly) return;
     setDraft((current) => ({ ...current, [page]: { ...current[page], [tier]: level } }));
     setSaved(`${page}:${tier}`);
     startTransition(() => setPageAccess(page, tier, level));
@@ -41,6 +71,9 @@ export function AccessGrid({ matrix }: { matrix: PageMatrix }) {
 
   return (
     <div className="space-y-3">
+      {readOnly ? (
+        <p className="text-xs text-faint">Read-only. Only admins and the owner can change access.</p>
+      ) : null}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
@@ -63,75 +96,111 @@ export function AccessGrid({ matrix }: { matrix: PageMatrix }) {
               ))}
             </tr>
           </thead>
-          <tbody>
-            {PORTAL_PAGES.map((page) => (
-              <tr key={page.key} className="border-b border-line/60 align-top">
-                <th scope="row" className="py-2.5 pr-3 text-left">
-                  <span className="block text-sm font-bold text-ink">
-                    {page.label}
-                    {page.nav ? null : (
-                      // Reached from a link or the search box rather than the
-                      // sidebar, so "hidden" here means something different: the
-                      // menu never offered it in the first place.
-                      <span className="ml-1.5 text-[10px] font-normal text-faint">
-                        not in the menu
-                      </span>
-                    )}
-                  </span>
-                  <span className="block max-w-[28ch] text-[11px] font-normal text-faint">
-                    {page.blurb}
-                  </span>
+          {groups.map((group) => (
+            <tbody key={group.title}>
+              <tr>
+                <th
+                  colSpan={TIERS.length + 1}
+                  scope="colgroup"
+                  className="bg-tint/40 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-wide text-brand-deep"
+                >
+                  {group.title}
                 </th>
-
-                {TIERS.map((tier) => {
-                  const bounds = accessBounds(page.key, tier);
-                  const fixed = bounds.min === bounds.max;
-                  const value = draft[page.key][tier];
-                  const justSaved = saved === `${page.key}:${tier}`;
-
-                  return (
-                    <td key={tier} className="py-2.5 pr-3">
-                      {fixed ? (
-                        <span className="text-xs text-faint">
-                          {ACCESS_LEVEL_LABEL[bounds.min]}
-                          <span className="block text-[10px]">locked</span>
-                        </span>
-                      ) : (
-                        <>
-                          <label className="sr-only" htmlFor={`pa-${page.key}-${tier}`}>
-                            {page.label} for {TIER_LABEL[tier]}
-                          </label>
-                          <select
-                            id={`pa-${page.key}-${tier}`}
-                            className="hs-input py-1 text-xs"
-                            value={value}
-                            disabled={pending}
-                            title={ACCESS_LEVEL_BLURB[value]}
-                            onChange={(event) =>
-                              choose(page.key, tier, event.target.value as PageAccessLevel)
-                            }
-                          >
-                            {ACCESS_LEVELS.filter(
-                              (level) => !(level === "NONE" && bounds.min !== "NONE"),
-                            ).map((level) => (
-                              <option key={level} value={level}>
-                                {ACCESS_LEVEL_LABEL[level]}
-                              </option>
-                            ))}
-                          </select>
-                          {justSaved ? (
-                            <span className="mt-0.5 block text-[10px] text-faint">
-                              {pending ? "Saving…" : "Saved"}
-                            </span>
-                          ) : null}
-                        </>
-                      )}
-                    </td>
-                  );
-                })}
               </tr>
-            ))}
-          </tbody>
+              {group.pages.map((page) => (
+                <tr key={page.key} className="border-b border-line/60 align-middle">
+                  <th scope="row" className="py-2 pr-3 text-left">
+                    <span className="block text-sm font-bold text-ink">
+                      {page.label}
+                      {page.nav ? null : (
+                        <span className="ml-1.5 text-[10px] font-normal text-faint">
+                          not in the menu
+                        </span>
+                      )}
+                    </span>
+                  </th>
+
+                  {TIERS.map((tier) => {
+                    const bounds = accessBounds(page.key, tier);
+                    const fixed = bounds.min === bounds.max;
+                    const value = draft[page.key]?.[tier] ?? bounds.min;
+                    const justSaved = saved === `${page.key}:${tier}`;
+                    const on = value !== "NONE";
+
+                    if (fixed || readOnly) {
+                      return (
+                        <td key={tier} className="py-2 pr-3">
+                          <span className={`text-xs ${on ? "text-ink" : "text-faint"}`}>
+                            {ACCESS_LEVEL_LABEL[value]}
+                            {fixed ? <span className="block text-[10px] text-faint">locked</span> : null}
+                          </span>
+                        </td>
+                      );
+                    }
+
+                    const canBeOff = bounds.min === "NONE";
+                    return (
+                      <td key={tier} className="py-2 pr-3">
+                        <div className="flex items-center gap-1.5">
+                          {canBeOff ? (
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={on}
+                              aria-label={`${page.label} for ${TIER_LABEL[tier]}`}
+                              disabled={pending}
+                              onClick={() =>
+                                choose(page.key, tier, on ? "NONE" : "READ")
+                              }
+                              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                                on ? "bg-brand" : "bg-line"
+                              }`}
+                            >
+                              <span
+                                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+                                  on ? "left-[18px]" : "left-0.5"
+                                }`}
+                              />
+                            </button>
+                          ) : null}
+                          {on ? (
+                            <>
+                              <label className="sr-only" htmlFor={`pa-${page.key}-${tier}`}>
+                                Level for {page.label}, {TIER_LABEL[tier]}
+                              </label>
+                              <select
+                                id={`pa-${page.key}-${tier}`}
+                                className="hs-input py-0.5 text-xs"
+                                value={value}
+                                disabled={pending}
+                                title={ACCESS_LEVEL_BLURB[value]}
+                                onChange={(event) =>
+                                  choose(page.key, tier, event.target.value as PageAccessLevel)
+                                }
+                              >
+                                {ACCESS_LEVELS.filter((level) => level !== "NONE").map((level) => (
+                                  <option key={level} value={level}>
+                                    {ACCESS_LEVEL_LABEL[level]}
+                                  </option>
+                                ))}
+                              </select>
+                            </>
+                          ) : (
+                            <span className="text-xs text-faint">Hidden</span>
+                          )}
+                        </div>
+                        {justSaved ? (
+                          <span className="mt-0.5 block text-[10px] text-faint">
+                            {pending ? "Saving…" : "Saved"}
+                          </span>
+                        ) : null}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
       </div>
 
@@ -143,12 +212,6 @@ export function AccessGrid({ matrix }: { matrix: PageMatrix }) {
           </div>
         ))}
       </dl>
-
-      <p className="text-xs text-faint">
-        Locked cells are the two things this grid will not do: the owner cannot be shut out of the
-        portal, the dashboard and settings cannot be hidden from anybody, and nobody below T3 Admin
-        can be let into the accounts screen or the audit log.
-      </p>
     </div>
   );
 }

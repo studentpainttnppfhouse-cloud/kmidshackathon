@@ -74,6 +74,8 @@ export const RULES = {
    * far more than a head will ever need and far less than a loop would send.
    */
   notify: { limit: 12, windowMs: 10 * 60 * 1000, blockMs: 10 * 60 * 1000 },
+  /** The public "I forgot my username / password / email" form. */
+  recovery: { limit: 3, windowMs: 60 * 60 * 1000, blockMs: 60 * 60 * 1000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export function rateLimit(key: string, rule: RateLimitRule): RateLimitResult {

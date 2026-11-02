@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm ci",
+  "buildCommand": "npx prisma generate && npm run db:bootstrap -- --strict && npm run build",
+  "regions": ["sin1"],
+  "git": { "deploymentEnabled": true }
+}

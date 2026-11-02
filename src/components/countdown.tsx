@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Ecg } from "@/components/ui";
 
 /**
@@ -10,7 +11,7 @@ import { Ecg } from "@/components/ui";
  * Rendered from a server-supplied ISO string and only started after mount, so
  * server and client markup agree on the first paint.
  */
-export function Countdown({ targetIso }: { targetIso: string }) {
+export function Countdown({ targetIso, href }: { targetIso: string; href?: string }) {
   const target = new Date(targetIso).getTime();
   const [now, setNow] = useState<number | null>(null);
 
@@ -32,7 +33,7 @@ export function Countdown({ targetIso }: { targetIso: string }) {
           seconds: Math.floor((diff % 60_000) / 1000),
         };
 
-  return (
+  const card = (
     <div className="hs-card overflow-hidden bg-gradient-to-br from-pink-600 to-pink-700 p-5 text-white">
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -64,5 +65,13 @@ export function Countdown({ targetIso }: { targetIso: string }) {
         ))}
       </div>
     </div>
+  );
+
+  return href ? (
+    <Link href={href} aria-label="Countdown to event, open the events page" className="block transition hover:opacity-95">
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }

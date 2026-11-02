@@ -18,7 +18,6 @@ import {
   safeFileName,
   safeMimeType,
 } from "@/lib/attachments";
-import { notifyAnnouncement } from "@/lib/teams/notify";
 import type { FormState } from "@/lib/actions/auth";
 import type { DocStatus } from "@prisma/client";
 
@@ -588,25 +587,59 @@ export async function createAnnouncement(_prev: FormState, formData: FormData): 
 
   await audit(viewer.id, "announcement.created", { type: "announcement", id: created.id });
 
-  // Queued after the announcement is safely written, never before: the portal
-  // is the record and Teams is the courtesy. `notifyAnnouncement` swallows its
-  // own failures for the same reason — a Microsoft outage must not turn a
-  // posted announcement into a form error.
-  await notifyAnnouncement({
-    announcementId: created.id,
-    title: d.title,
-    body: d.body,
-    departmentId,
-    authorId: viewer.id,
-    authorName: viewer.nickname ?? viewer.name,
-    pinned: Boolean(d.pinned),
-    force: Boolean(d.toTeams),
-  });
 
   revalidatePath("/announcements");
   revalidatePath("/dashboard");
   revalidatePath("/notifications");
   redirect("/announcements");
+}
+
+export async function updateAnnouncement(
+  id: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const viewer = await requireViewer();
+  const throttled = writeLimit(viewer);
+  if (throttled) return throttled;
+
+  const existing = await db.announcement.findUnique({
+    where: { id },
+    select: { departmentId: true, authorId: true, deletedAt: true },
+  });
+  if (!existing || existing.deletedAt) return { error: "That announcement no longer exists." };
+  if (!can(viewer, "update", { kind: "announcement", ...existing })) {
+    await audit(viewer.id, "announcement.update_denied", {
+      type: "announcement",
+      id,
+      detail: "Tried to edit an announcement they may not edit. Reason: only the author, the department head or an admin can edit it.",
+    });
+    return { error: "You can't edit this announcement." };
+  }
+
+  const parsed = z
+    .object({
+      title: z.string().trim().min(2, "Give the announcement a title.").max(200),
+      body: z.string().trim().min(2, "Write the announcement.").max(5000),
+      pinned: z.boolean(),
+    })
+    .safeParse({
+      title: formData.get("title") ?? "",
+      body: formData.get("body") ?? "",
+      pinned: formData.get("pinned") === "on",
+    });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  await db.announcement.update({ where: { id }, data: parsed.data });
+  await audit(viewer.id, "announcement.updated", {
+    type: "announcement",
+    id,
+    detail: "Edited the announcement title or text",
+  });
+
+  revalidatePath("/announcements");
+  revalidatePath("/dashboard");
+  redirect(`/announcements/${id}`);
 }
 
 export async function markAnnouncementRead(id: string): Promise<void> {
@@ -657,62 +690,6 @@ export async function deleteAnnouncement(id: string): Promise<void> {
 // Forms — external links plus forms built and answered inside the portal.
 // The question schema and the responses live in src/lib/actions/forms.ts.
 // ---------------------------------------------------------------------------
-
-const formSchema = z.object({
-  title: z.string().trim().min(2, "Name the form.").max(200),
-  description: z.string().trim().max(1000).optional().or(z.literal("")),
-  type: z.enum(["internal", "external"]),
-  url: optionalUrlSchema,
-  responseUrl: optionalUrlSchema,
-  departmentId: z.string().optional().or(z.literal("")),
-  deadline: z.string().max(20).optional().or(z.literal("")),
-});
-
-export async function createForm(_prev: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await requireViewer();
-  const throttled = writeLimit(viewer);
-  if (throttled) return throttled;
-
-  const parsed = formSchema.safeParse({
-    title: formData.get("title") ?? "",
-    description: formData.get("description") ?? "",
-    type: formData.get("type") ?? "external",
-    url: formData.get("url") ?? "",
-    responseUrl: formData.get("responseUrl") ?? "",
-    departmentId: formData.get("departmentId") ?? "",
-    deadline: formData.get("deadline") ?? "",
-  });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const d = parsed.data;
-
-  const departmentId = d.departmentId || null;
-  if (departmentId && !(await assertDepartmentExists(departmentId))) {
-    return { error: "That department no longer exists." };
-  }
-
-  assertCan(viewer, "create", { kind: "form", departmentId, ownerId: viewer.id });
-
-  if (d.type === "external" && !d.url) {
-    return { error: "An external form needs its link." };
-  }
-
-  const created = await db.form.create({
-    data: {
-      title: d.title,
-      description: d.description || null,
-      type: d.type,
-      url: d.url || null,
-      responseUrl: d.responseUrl || null,
-      departmentId,
-      ownerId: viewer.id,
-      deadline: d.deadline ? new Date(`${d.deadline}T23:59:59+07:00`) : null,
-    },
-  });
-
-  await audit(viewer.id, "form.created", { type: "form", id: created.id, detail: d.title });
-  revalidatePath("/forms");
-  redirect("/forms");
-}
 
 export async function deleteForm(id: string): Promise<void> {
   const viewer = await requireViewer();

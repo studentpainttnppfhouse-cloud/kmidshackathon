@@ -22,6 +22,8 @@ export function InviteForm({
     <form action={action} className="space-y-4">
       <input type="hidden" name="code" value={code} />
       <BotFields />
+      {/* Invisible to people, visible to password managers: files the new password under this email. */}
+      <input type="email" name="username" autoComplete="username" value={email} readOnly hidden />
 
       <div>
         <span className="hs-label">Your email</span>

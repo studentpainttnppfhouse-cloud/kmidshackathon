@@ -1,79 +1,212 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { submitFormResponse } from "@/lib/actions/forms";
 import { Feedback, SubmitButton } from "@/components/form-bits";
-import { optionsFor, type FormDefinition, type Question, type ResponsePayload } from "@/lib/forms-schema";
+import {
+  acceptAttribute,
+  checkFile,
+  isUpload,
+  maxFilesFor,
+  optionsFor,
+  type FormDefinition,
+  type Question,
+  type ResponsePayload,
+} from "@/lib/forms-schema";
+import { formatBytes } from "@/lib/attachments";
 import type { FormState } from "@/lib/actions/auth";
 
 const initial: FormState = {};
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export type StoredFile = { id: string; name: string; mimeType: string; size: number };
+
 /**
- * Answering a portal form.
- *
- * `required` here is a courtesy that saves a round trip; the server checks it
- * again, along with option membership and every length cap, because none of
- * these attributes survive a devtools inspector. See `validateResponse`.
+ * Answering a portal form: one clean column, Airtable style, with the cover on
+ * top. Browser checks save a round trip; the server re-checks everything with
+ * the same schema (`validateResponse`).
  */
 export function FormFill({
   formId,
+  title,
+  description,
   definition,
   existing,
+  existingFiles = {},
+  maxBytes,
+  askEmail = false,
+  lockedEmail = null,
 }: {
   formId: string;
+  title: string;
+  description?: string | null;
   definition: FormDefinition;
   existing: ResponsePayload | null;
+  existingFiles?: Record<string, StoredFile[]>;
+  maxBytes: number;
+  /** Public forms: the respondent's email comes first, before any question. */
+  askEmail?: boolean;
+  /** A signed-in member's address, shown and not editable. */
+  lockedEmail?: string | null;
 }) {
   const [state, action] = useActionState(submitFormResponse, initial);
+  const [email, setEmail] = useState(lockedEmail ?? "");
+  const [emailConfirmed, setEmailConfirmed] = useState(Boolean(lockedEmail) || !askEmail);
+  const [emailError, setEmailError] = useState("");
+  const [renderedAt] = useState(() => String(Date.now()));
+  const [editing, setEditing] = useState(false);
+  const [version, setVersion] = useState(0);
+
+  const done = Boolean(state.ok) && !editing;
 
   return (
-    <form action={action} className="space-y-5">
-      <input type="hidden" name="formId" value={formId} />
-
-      {existing ? (
-        <p className="hs-feedback hs-feedback-ok" role="status">
-          <span aria-hidden="true">✓</span> You have answered this already. Changing anything below
-          and submitting replaces your previous answers.
-        </p>
+    <div className="hs-card mx-auto max-w-2xl overflow-hidden p-0">
+      {definition.cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={definition.cover} alt="" className="h-40 w-full object-cover sm:h-56" />
       ) : null}
 
-      {definition.questions.map((question, index) => (
-        <QuestionField
-          key={question.id}
-          question={question}
-          index={index}
-          value={existing?.[question.id]}
-        />
-      ))}
+      <div className="p-5 sm:p-8">
+        <h1 className="text-2xl font-bold text-ink">{title}</h1>
+        {description ? (
+          <p className="mt-2 whitespace-pre-line text-sm text-muted">{description}</p>
+        ) : null}
 
-      <Feedback state={state} />
+        {done ? (
+          <div role="status" className="mt-8 space-y-4 py-6 text-center">
+            <p className="text-4xl" aria-hidden="true">
+              ✓
+            </p>
+            <p className="text-lg font-semibold text-ink">
+              {definition.confirmation || state.ok}
+            </p>
+            {askEmail && !lockedEmail ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(true);
+                setVersion((v) => v + 1);
+              }}
+              className="hs-btn hs-btn-secondary"
+            >
+              Edit my answers
+            </button>
+            )}
+          </div>
+        ) : !emailConfirmed ? (
+          <form
+            className="mt-6 space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = email.trim();
+              if (!EMAIL_PATTERN.test(value)) {
+                setEmailError("Enter a valid email address.");
+                return;
+              }
+              setEmail(value);
+              setEmailError("");
+              setEmailConfirmed(true);
+            }}
+          >
+            <div>
+              <label htmlFor="respondent-email" className="block text-sm font-semibold text-ink">
+                Your email <span className="text-danger-strong" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="respondent-email"
+                type="email"
+                autoComplete="email"
+                required
+                maxLength={254}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="hs-input mt-2.5"
+                aria-invalid={emailError ? true : undefined}
+              />
+              {emailError ? (
+                <p role="alert" className="mt-1.5 text-xs text-danger-strong">
+                  {emailError}
+                </p>
+              ) : null}
+            </div>
+            <button type="submit" className="hs-btn hs-btn-primary">
+              Continue
+            </button>
+          </form>
+        ) : (
+          <form
+            key={version}
+            action={action}
+            onSubmit={() => setEditing(false)}
+            className="relative mt-6 space-y-6"
+          >
+            <input type="hidden" name="formId" value={formId} />
+            <input type="hidden" name="form_rendered_at" value={renderedAt} />
+            {/* Honeypot: hidden from people, irresistible to scripts. */}
+            <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+              <label>
+                Company website
+                <input type="text" name="company_website" tabIndex={-1} autoComplete="off" defaultValue="" />
+              </label>
+            </div>
 
-      <SubmitButton className="hs-btn hs-btn-primary" pendingLabel="Sending…">
-        {existing ? "Update my answers" : "Submit"}
-      </SubmitButton>
-    </form>
+            {askEmail || lockedEmail ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                <span className="text-muted">
+                  Answering as <span className="font-semibold text-ink">{email}</span>
+                  {lockedEmail ? <span className="ml-1 text-xs text-faint">(signed in)</span> : null}
+                </span>
+                {!lockedEmail ? (
+                  <button
+                    type="button"
+                    onClick={() => setEmailConfirmed(false)}
+                    className="text-xs font-semibold text-brand-deep"
+                  >
+                    Change
+                  </button>
+                ) : null}
+                <input type="hidden" name="respondentEmail" value={email} />
+              </div>
+            ) : null}
+
+            {existing ? (
+              <p className="hs-feedback hs-feedback-ok" role="status">
+                <span aria-hidden="true">✓</span> You have answered this already. Submitting again
+                replaces your previous answers.
+              </p>
+            ) : null}
+
+            {definition.questions.map((question) =>
+              isUpload(question.type) ? (
+                <UploadField
+                  key={question.id}
+                  question={question}
+                  stored={existingFiles[question.id] ?? []}
+                  maxBytes={maxBytes}
+                resync={state}
+                />
+              ) : (
+                <QuestionField key={question.id} question={question} value={existing?.[question.id]} />
+              ),
+            )}
+
+            <Feedback state={state.ok ? {} : state} />
+
+            <SubmitButton className="hs-btn hs-btn-primary w-full sm:w-auto" pendingLabel="Sending…">
+              {definition.submitLabel || (existing ? "Update my answers" : "Submit")}
+            </SubmitButton>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
 
-function QuestionField({
-  question,
-  index,
-  value,
-}: {
-  question: Question;
-  index: number;
-  value: string | string[] | undefined;
-}) {
-  const name = `q_${question.id}`;
-  const id = `field-${question.id}`;
-  const helpId = question.help ? `${id}-help` : undefined;
-  const single = Array.isArray(value) ? "" : (value ?? "");
-
-  const label = (
+function FieldLabel({ question, htmlFor }: { question: Question; htmlFor?: string }) {
+  const inner = (
     <>
-      <span className="text-sm font-semibold text-ink">
-        {index + 1}. {question.label}
-      </span>
+      <span className="text-sm font-semibold text-ink">{question.label}</span>
       {question.required ? (
         <span className="ml-1 text-danger-strong" aria-hidden="true">
           *
@@ -82,6 +215,217 @@ function QuestionField({
       {question.required ? <span className="sr-only"> (required)</span> : null}
     </>
   );
+  return htmlFor ? (
+    <label htmlFor={htmlFor} className="block">
+      {inner}
+    </label>
+  ) : (
+    <span className="block">{inner}</span>
+  );
+}
+
+/**
+ * A drag-and-drop zone that also opens the file picker. The chosen files are
+ * written back into a real <input type="file"> so the form posts them with
+ * everything else; previews are object URLs, revoked when the file goes.
+ */
+function UploadField({
+  question,
+  stored,
+  maxBytes,
+  resync,
+}: {
+  question: Question;
+  stored: StoredFile[];
+  maxBytes: number;
+  /** Changes after each submit; React resets file inputs then, so refill it. */
+  resync: unknown;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const [over, setOver] = useState(false);
+  const [cleared, setCleared] = useState(false);
+  const id = `field-${question.id}`;
+  const limit = maxFilesFor(question);
+  const images = question.type === "image_upload";
+
+  useEffect(() => {
+    const urls = files.map((file) => (file.type.startsWith("image/") ? URL.createObjectURL(file) : ""));
+    setPreviews(urls);
+    return () => urls.forEach((url) => url && URL.revokeObjectURL(url));
+  }, [files]);
+
+  const sync = (next: File[]) => {
+    setFiles(next);
+    const input = inputRef.current;
+    if (!input) return;
+    try {
+      const transfer = new DataTransfer();
+      next.forEach((file) => transfer.items.add(file));
+      input.files = transfer.files;
+    } catch {
+      // Very old browsers: the picker's own selection is still posted.
+    }
+  };
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input || files.length === 0 || input.files?.length) return;
+    try {
+      const transfer = new DataTransfer();
+      files.forEach((file) => transfer.items.add(file));
+      input.files = transfer.files;
+    } catch {
+      // Nothing to do: the person picks the file again.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resync]);
+
+  const accept = (incoming: FileList | File[] | null) => {
+    if (!incoming) return;
+    setError("");
+    const next = limit === 1 ? [] : [...files];
+    for (const file of Array.from(incoming)) {
+      const problem = checkFile(question, file, maxBytes);
+      if (problem) {
+        setError(problem);
+        continue;
+      }
+      if (next.length >= limit) {
+        setError(`At most ${limit} ${limit === 1 ? "file" : "files"} here.`);
+        break;
+      }
+      next.push(file);
+    }
+    sync(next);
+  };
+
+  const showStored = stored.length > 0 && files.length === 0 && !cleared;
+
+  return (
+    <div>
+      <FieldLabel question={question} htmlFor={id} />
+      {question.help ? <p className="mt-1 text-xs text-faint">{question.help}</p> : null}
+
+      <div
+        onDragOver={(event) => {
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setOver(false);
+          accept(event.dataTransfer.files);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={`mt-2.5 cursor-pointer rounded-xl border-2 border-dashed px-4 py-6 text-center transition ${
+          over ? "border-brand bg-tint" : "border-line hover:border-brand"
+        }`}
+      >
+        <p className="text-sm text-muted">
+          <span aria-hidden="true">{images ? "🖼" : "📎"}</span> Drop {images ? "photos" : "files"} here, or{" "}
+          <span className="font-semibold text-brand-deep underline">browse</span>
+        </p>
+        <p className="mt-1 text-xs text-faint">
+          {limit === 1 ? "One file" : `Up to ${limit} files`}, {formatBytes(maxBytes)} each
+        </p>
+        <input
+          ref={inputRef}
+          id={id}
+          name={`q_${question.id}`}
+          type="file"
+          accept={images ? "image/*" : acceptAttribute(question)}
+          multiple={limit > 1}
+          // Required only when nothing is stored already; the server decides.
+          required={question.required && !showStored && files.length === 0}
+          onChange={(event) => accept(event.target.files)}
+          onClick={(event) => event.stopPropagation()}
+          className="sr-only"
+        />
+      </div>
+
+      {cleared ? <input type="hidden" name={`q_${question.id}__clear`} value="1" /> : null}
+
+      {error ? (
+        <p role="alert" className="mt-1.5 text-xs text-danger-strong">
+          {error}
+        </p>
+      ) : null}
+
+      {files.length > 0 ? (
+        <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {files.map((file, index) => (
+            <li key={`${file.name}-${index}`} className="relative overflow-hidden rounded-lg border border-line">
+              {previews[index] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previews[index]} alt={file.name} className="h-24 w-full object-cover" />
+              ) : (
+                <div className="flex h-24 items-center justify-center text-2xl" aria-hidden="true">
+                  📄
+                </div>
+              )}
+              <p className="truncate px-2 py-1 text-xs text-muted">
+                {file.name} · {formatBytes(file.size)}
+              </p>
+              <button
+                type="button"
+                onClick={() => sync(files.filter((_, i) => i !== index))}
+                aria-label={`Remove ${file.name}`}
+                className="absolute right-1 top-1 rounded-full bg-surface px-1.5 text-xs shadow"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {showStored ? (
+        <div className="mt-3 space-y-1.5">
+          <p className="text-xs text-faint">Already sent (choosing new files replaces these):</p>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {stored.map((file) => (
+              <li key={file.id} className="overflow-hidden rounded-lg border border-line">
+                {file.mimeType.startsWith("image/") ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`/api/attachments/${file.id}?inline=1`} alt={file.name} className="h-24 w-full object-cover" />
+                ) : null}
+                <a
+                  href={`/api/attachments/${file.id}`}
+                  className="block truncate px-2 py-1 text-xs text-brand-deep"
+                >
+                  {file.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+          {!question.required ? (
+            <button type="button" onClick={() => setCleared(true)} className="text-xs text-danger-strong">
+              Remove sent files
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function QuestionField({
+  question,
+  value,
+}: {
+  question: Question;
+  value: string | string[] | undefined;
+}) {
+  const name = `q_${question.id}`;
+  const id = `field-${question.id}`;
+  const helpId = question.help ? `${id}-help` : undefined;
+  const single = Array.isArray(value) ? "" : (value ?? "");
+
+  const label = <FieldLabel question={question} />;
 
   const help = question.help ? (
     <p id={helpId} className="mt-1 text-xs text-faint">
@@ -102,8 +446,8 @@ function QuestionField({
     const selected = Array.isArray(value) ? value : value ? [value] : [];
 
     return (
-      <fieldset className="hs-card p-4">
-        <legend className="px-1">{label}</legend>
+      <fieldset>
+        <legend className="mb-0.5">{label}</legend>
         {help}
         <div
           className={`mt-2.5 ${question.type === "scale" ? "flex flex-wrap gap-2" : "space-y-1.5"}`}
@@ -131,10 +475,8 @@ function QuestionField({
   }
 
   return (
-    <div className="hs-card p-4">
-      <label htmlFor={id} className="block">
-        {label}
-      </label>
+    <div>
+      <FieldLabel question={question} htmlFor={id} />
       {help}
 
       {question.type === "long_text" ? (

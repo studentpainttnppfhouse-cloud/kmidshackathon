@@ -83,17 +83,6 @@ export default async function HelpPage() {
               ),
             },
             {
-              q: "Can I see other departments' work?",
-              a: (
-                <>
-                  Yes, reading across departments is deliberate — the whole point of the portal is
-                  one shared view. Writing is different: you edit inside your own department, and
-                  approving or reassigning is your head's job. Two things are never open: the
-                  incident log, which is admin-only, and other people's phone numbers and LINE IDs.
-                </>
-              ),
-            },
-            {
               q: "Where do documents actually live?",
               a: (
                 <>
@@ -186,17 +175,6 @@ export default async function HelpPage() {
         />
       </Card>
 
-      <Card>
-        <SectionTitle>What each tier can do</SectionTitle>
-        <ul className="space-y-2.5">
-          {TIERS.map((tier) => (
-            <li key={tier} className="rounded-xl border border-line p-3">
-              <p className="text-sm font-bold text-ink">{TIER_LABEL[tier]}</p>
-              <p className="mt-0.5 text-sm text-muted">{TIER_BLURB[tier]}</p>
-            </li>
-          ))}
-        </ul>
-      </Card>
 
       <LastUpdated at={updated} label="This page last changed" />
     </div>
