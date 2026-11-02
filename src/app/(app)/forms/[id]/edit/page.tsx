@@ -34,7 +34,6 @@ export default async function EditFormPage({ params }: { params: Promise<{ id: s
       <PageHeader
         eyebrow="Forms"
         title="Edit form"
-        subtitle="Answers already submitted are kept. Removing a question hides it from the table but does not delete what people said."
         action={
           <Link href={`/forms/${form.id}`} className="hs-btn hs-btn-ghost">
             Cancel
