@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
   });
   if (!passkey || !passkey.user || passkey.user.deletedAt || !passkey.user.isActive) {
     await audit(passkey?.userId ?? null, "login.passkey_failed", {
+      result: "failed",
       type: "user",
       id: passkey?.userId,
       detail: passkey ? "Passkey sign-in refused: account is suspended or deleted." : "Passkey sign-in refused: unknown credential.",
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     await audit(passkey.userId, "login.passkey_failed", {
+      result: "failed",
       type: "user",
       id: passkey.userId,
       detail: `Passkey sign-in failed verification: ${error instanceof Error ? error.message : "unknown"}`.slice(0, 500),

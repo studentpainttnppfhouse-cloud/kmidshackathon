@@ -131,7 +131,7 @@ async function AccountSection({
 
       <Card>
         <SectionTitle>Password</SectionTitle>
-        <PasswordForm />
+        <PasswordForm username={viewer.email} />
       </Card>
 
       <Card>

@@ -33,6 +33,7 @@ async function requireAdminViewer(action: string): Promise<Viewer> {
   const viewer = await requireViewer();
   if (!isAdmin(viewer)) {
     await audit(viewer.id, "access.denied", {
+      result: "denied",
       type: "page",
       id: "people",
       detail: `Tried to ${action} without admin or owner rights.`,
@@ -58,6 +59,7 @@ async function issueResetFor(
   if (!target || target.deletedAt) return { error: "That person no longer exists." };
   if (TIER_ORDER[target.tier] > TIER_ORDER[viewer.tier]) {
     await audit(viewer.id, "password.reset.denied", {
+      result: "denied",
       type: "user",
       id: userId,
       detail: `Refused a reset link for ${displayName(target)}: their tier is above yours.`,
@@ -128,6 +130,7 @@ export async function addPerson(_prev: LinkState, formData: FormData): Promise<L
 
   if (TIER_ORDER[d.tier] > TIER_ORDER[viewer.tier]) {
     await audit(viewer.id, "user.add_denied", {
+      result: "denied",
       type: "user",
       detail: `Refused to add ${d.email} as ${TIER_LABEL[d.tier]}: above your own tier.`,
     });
@@ -239,6 +242,7 @@ export async function requestRecovery(_prev: FormState, formData: FormData): Pro
   const limit = rateLimit(`recovery:${ip}`, RULES.recovery);
   if (!limit.ok) {
     await audit(null, "recovery.rate_limited", {
+      result: "denied",
       type: "recovery",
       detail: "A recovery request was refused because the connection sent too many.",
     });
@@ -247,6 +251,7 @@ export async function requestRecovery(_prev: FormState, formData: FormData): Pro
 
   if (looksAutomated(formData)) {
     await audit(null, "recovery.bot_blocked", {
+      result: "denied",
       type: "recovery",
       detail: "A recovery request looked automated and was dropped.",
     });

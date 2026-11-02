@@ -30,7 +30,7 @@ export async function GET() {
     rpID,
     userName: viewer.username || viewer.email,
     userDisplayName: viewer.nickname || viewer.name,
-    userID: new TextEncoder().encode(viewer.id),
+    userID: new Uint8Array(Buffer.from(viewer.id)),
     attestationType: "none",
     excludeCredentials: existing.map((c) => ({
       id: c.credentialId,
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     await audit(viewer.id, "passkey.add_failed", {
+      result: "failed",
       type: "user",
       id: viewer.id,
       detail: `Passkey registration failed: ${error instanceof Error ? error.message : "unknown error"}`.slice(0, 500),

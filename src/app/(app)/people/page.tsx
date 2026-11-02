@@ -1,184 +1,195 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import { requireViewer, can } from "@/lib/authorize";
-import { Avatar, Card, Divider, EmptyState, PageHeader, SectionTitle, TierPill } from "@/components/ui";
-import { swatchStyle } from "@/lib/color";
+import { requireViewer, isAdmin } from "@/lib/authorize";
+import { EmptyState, PageHeader } from "@/components/ui";
+import { formatDateTime } from "@/lib/dates";
+import {
+  AddPersonButton,
+  PeopleTable,
+  RecoveryDecision,
+  type PersonRow,
+} from "./people-widgets";
 
 export const metadata: Metadata = { title: "People" };
 export const dynamic = "force-dynamic";
 
+const KIND_LABEL: Record<string, string> = {
+  USERNAME: "Forgot username",
+  PASSWORD: "Forgot password",
+  EMAIL: "Forgot email",
+  OTHER: "Other",
+};
+
 export default async function PeoplePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; dept?: string }>;
+  searchParams: Promise<{ tab?: string; add?: string }>;
 }) {
   const viewer = await requireViewer();
-  const { q, dept } = await searchParams;
-  const canImport = can(viewer, "manage_users", { kind: "user", userId: viewer.id });
+  const admin = isAdmin(viewer);
+  const { tab, add } = await searchParams;
+  const showRequests = admin && tab === "requests";
 
-  const [departments, people] = await Promise.all([
-    db.department.findMany({
-      orderBy: { sortOrder: "asc" },
-      include: {
-        head: { select: { id: true, name: true, nickname: true, avatarUrl: true, roleTitle: true } },
-        members: {
-          where: { deletedAt: null },
-          select: { id: true, name: true, nickname: true, avatarUrl: true, roleTitle: true, tier: true },
-          orderBy: { name: "asc" },
-        },
-      },
-    }),
+  const [people, departments, pendingCount] = await Promise.all([
     db.user.findMany({
-      where: {
-        deletedAt: null,
-        ...(dept ? { department: { slug: dept } } : {}),
-        ...(q
-          ? {
-              OR: [
-                { name: { contains: q } },
-                { nickname: { contains: q } },
-                { roleTitle: { contains: q } },
-              ],
-            }
-          : {}),
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        nickname: true,
+        username: true,
+        email: true,
+        roleTitle: true,
+        tier: true,
+        avatarUrl: true,
+        isActive: true,
+        passwordHash: true,
+        lastLoginAt: true,
+        department: { select: { name: true, color: true, slug: true, sortOrder: true } },
       },
-      include: { department: { select: { name: true, color: true, slug: true } } },
       orderBy: [{ tier: "desc" }, { name: "asc" }],
     }),
+    db.department.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
+    admin ? db.recoveryRequest.count({ where: { status: "PENDING" } }) : Promise.resolve(0),
   ]);
 
+  // Only what the viewer may see goes to the browser; the hash never leaves.
+  const rows: PersonRow[] = people.map((p) => ({
+    id: p.id,
+    name: p.name,
+    nickname: p.nickname,
+    username: admin ? p.username : null,
+    email: admin ? p.email : null,
+    roleTitle: p.roleTitle,
+    tier: p.tier,
+    avatarUrl: p.avatarUrl,
+    isActive: p.isActive,
+    hasPassword: admin ? Boolean(p.passwordHash) : null,
+    lastLoginAt: admin && p.lastLoginAt ? p.lastLoginAt.toISOString() : null,
+    department: p.department,
+  }));
+
   return (
-    <div className="hs-enter space-y-6">
+    <div className="hs-enter space-y-5">
       <PageHeader
         eyebrow="People"
-        title="Directory & org chart"
-        subtitle="Who is on the team, which department they are in, and who leads it."
+        title="People"
         action={
-          canImport ? (
-            <Link href="/people/import" className="hs-btn hs-btn-primary">
-              <span aria-hidden="true">＋</span> Import people
-            </Link>
+          admin ? (
+            <AddPersonButton departments={departments} viewerTier={viewer.tier} startOpen={add === "1"} />
           ) : null
         }
       />
 
-      <form className="flex flex-wrap gap-2">
-        <input
-          name="q"
-          defaultValue={q ?? ""}
-          type="search"
-          placeholder="Search a name or role…"
-          className="hs-input max-w-xs"
-          aria-label="Search people"
-        />
-        <select name="dept" defaultValue={dept ?? ""} className="hs-input max-w-[220px]">
-          <option value="">All departments</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.slug}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-        <button type="submit" className="hs-btn hs-btn-secondary">
-          Search
-        </button>
-      </form>
-
-      {people.length === 0 ? (
-        <EmptyState title="Nobody matches that" hint="Try a different name or clear the filter." />
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {people.map((p) => (
-            <Link
-              key={p.id}
-              href={`/people/${p.id}`}
-              className="hs-card flex items-center gap-3 p-4"
-            >
-              <Avatar name={p.name} nickname={p.nickname} url={p.avatarUrl} size={44} />
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-bold text-ink">
-                  {p.nickname || p.name}
-                </span>
-                <span className="block truncate text-xs text-muted">
-                  {p.roleTitle ?? "Staff"}
-                </span>
-                <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <TierPill tier={p.tier} />
-                  {p.department ? (
-                    <span
-                      className="hs-pill"
-                      style={swatchStyle(p.department.color)}
-                    >
-                      {p.department.name}
-                    </span>
-                  ) : null}
-                </span>
+      {admin ? (
+        <nav className="flex gap-1 border-b border-line" aria-label="People sections">
+          <Link
+            href="/people"
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-semibold ${!showRequests ? "border-brand text-brand-deep" : "border-transparent text-muted"}`}
+          >
+            Directory
+          </Link>
+          <Link
+            href="/people?tab=requests"
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-semibold ${showRequests ? "border-brand text-brand-deep" : "border-transparent text-muted"}`}
+          >
+            Requests
+            {pendingCount > 0 ? (
+              <span className="ml-1.5 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {pendingCount}
               </span>
-            </Link>
-          ))}
-        </div>
+            ) : null}
+          </Link>
+        </nav>
+      ) : null}
+
+      {showRequests ? (
+        <RequestsTab viewerId={viewer.id} people={rows} />
+      ) : (
+        <PeopleTable people={rows} isAdmin={admin} />
+      )}
+    </div>
+  );
+}
+
+async function RequestsTab({ viewerId, people }: { viewerId: string; people: PersonRow[] }) {
+  const [pending, recent] = await Promise.all([
+    db.recoveryRequest.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" }, take: 100 }),
+    db.recoveryRequest.findMany({
+      where: { status: { not: "PENDING" } },
+      orderBy: { resolvedAt: "desc" },
+      take: 20,
+    }),
+  ]);
+
+  // Opening the queue counts as having seen the notices about it.
+  await db.portalNotice.updateMany({
+    where: { userId: viewerId, readAt: null, href: "/people?tab=requests" },
+    data: { readAt: new Date() },
+  });
+
+  const options = people.map((p) => ({
+    id: p.id,
+    label: `${p.nickname || p.name} · ${p.email ?? ""}`,
+  }));
+  const nameOf = new Map(people.map((p) => [p.id, p.nickname || p.name]));
+
+  return (
+    <div className="space-y-4">
+      {pending.length === 0 ? (
+        <EmptyState title="No open requests" />
+      ) : (
+        pending.map((r) => (
+          <div key={r.id} className="hs-card space-y-3 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-bold text-ink">
+                {r.name || r.contact}
+                <span className="ml-2 hs-pill bg-warn-soft text-warn-strong">{KIND_LABEL[r.kind]}</span>
+              </p>
+              <span className="text-xs text-faint">{formatDateTime(r.createdAt)}</span>
+            </div>
+            <p className="text-xs text-muted">
+              Wrote: <span className="font-semibold text-ink">{r.contact}</span>
+              {r.matchedUserId ? ` · looks like ${nameOf.get(r.matchedUserId) ?? "a known account"}` : " · no account matched"}
+            </p>
+            {r.message ? (
+              <p className="whitespace-pre-wrap rounded-lg bg-surface-2 p-3 text-sm text-ink">{r.message}</p>
+            ) : null}
+            <RecoveryDecision
+              request={{
+                id: r.id,
+                kind: r.kind,
+                contact: r.contact,
+                name: r.name,
+                message: r.message,
+                matchedUserId: r.matchedUserId,
+                createdAt: r.createdAt.toISOString(),
+              }}
+              people={options}
+            />
+          </div>
+        ))
       )}
 
-      <Divider />
-
-      <Card>
-        <SectionTitle>Org chart</SectionTitle>
-        <div className="space-y-4">
-          {departments.map((d) => (
-            <div key={d.id} className="rounded-xl border border-line p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <span
-                  className="h-3 w-3 rounded-full"
-                  style={{ background: d.color }}
-                  aria-hidden="true"
-                />
-                <Link href={`/departments/${d.slug}`} className="font-bold text-ink hover:text-brand-deep">
-                  {d.name}
-                </Link>
-                <span className="text-xs text-faint">{d.members.length} people</span>
-              </div>
-
-              {d.head ? (
-                <Link
-                  href={`/people/${d.head.id}`}
-                  className="mb-3 flex items-center gap-2 rounded-lg bg-tint px-3 py-2"
-                >
-                  <Avatar
-                    name={d.head.name}
-                    nickname={d.head.nickname}
-                    url={d.head.avatarUrl}
-                    size={30}
-                  />
-                  <span className="text-sm">
-                    <span className="font-semibold text-brand-deep">
-                      {d.head.nickname || d.head.name}
-                    </span>
-                    <span className="ml-1.5 text-xs text-muted">Head</span>
-                  </span>
-                </Link>
-              ) : (
-                <p className="mb-3 text-xs text-faint">No head assigned yet.</p>
-              )}
-
-              <div className="flex flex-wrap gap-1.5">
-                {d.members
-                  .filter((m) => m.id !== d.head?.id)
-                  .map((m) => (
-                    <Link
-                      key={m.id}
-                      href={`/people/${m.id}`}
-                      className="flex items-center gap-1.5 rounded-full border border-line py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-muted hover:border-brand hover:text-brand-deep"
-                    >
-                      <Avatar name={m.name} nickname={m.nickname} url={m.avatarUrl} size={22} />
-                      {m.nickname || m.name}
-                    </Link>
-                  ))}
-              </div>
-            </div>
-          ))}
+      {recent.length > 0 ? (
+        <div className="hs-card p-4">
+          <p className="hs-eyebrow mb-2">Recently handled</p>
+          <ul className="space-y-1.5 text-sm">
+            {recent.map((r) => (
+              <li key={r.id} className="flex flex-wrap justify-between gap-2">
+                <span className="text-ink">
+                  {r.name || r.contact} · {KIND_LABEL[r.kind]}
+                </span>
+                <span className={r.status === "APPROVED" ? "text-ok-strong" : "text-danger-strong"}>
+                  {r.status === "APPROVED" ? "Approved" : "Denied"}
+                  {r.resolvedById ? ` by ${nameOf.get(r.resolvedById) ?? "an admin"}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-      </Card>
+      ) : null}
     </div>
   );
 }

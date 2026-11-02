@@ -5,14 +5,19 @@ import { changePassword } from "@/lib/actions/auth";
 import type { FormState } from "@/lib/actions/auth";
 import { Feedback, PasswordField, SubmitButton } from "@/components/form-bits";
 import { MIN_PASSWORD_LENGTH } from "@/lib/constants";
+import { PasskeyManager } from "@/components/passkey-manager";
 
 const initial: FormState = {};
 
-export function PasswordForm() {
+export function PasswordForm({ username }: { username?: string } = {}) {
   const [state, action] = useActionState(changePassword, initial);
 
   return (
+    <div className="space-y-6">
     <form action={action} className="space-y-4">
+      {username ? (
+        <input type="text" name="username" autoComplete="username" value={username} readOnly hidden />
+      ) : null}
       <PasswordField
         id="current"
         name="current"
@@ -44,5 +49,9 @@ export function PasswordForm() {
         Change password
       </SubmitButton>
     </form>
+      <div className="border-t border-line-soft pt-5">
+        <PasskeyManager />
+      </div>
+    </div>
   );
 }

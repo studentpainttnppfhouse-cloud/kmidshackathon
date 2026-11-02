@@ -60,6 +60,7 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   const limit = rateLimit(`login:${ip}`, RULES.login);
   if (!limit.ok) {
     await audit(null, "login.rate_limited", {
+      result: "denied",
       type: "user",
       detail: "Sign-in refused: too many attempts from one connection.",
     });
@@ -96,6 +97,7 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   if (!user || !user.passwordHash || user.deletedAt || !user.isActive) {
     await equalizeTiming(password);
     await audit(user?.id ?? null, "login.failed", {
+      result: "failed",
       type: "user",
       id: user?.id,
       detail: !user
@@ -111,7 +113,7 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
     await audit(user.id, "login.failed", {
       type: "user",
       id: user.id,
-      detail: `Sign-in attempt for ${email}`,
+      detail: `Sign-in attempt for ${user.email}`,
       result: "denied",
       reason: "Account is temporarily locked after too many wrong passwords",
     });
@@ -134,7 +136,7 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
     await audit(user.id, "login.failed", {
       type: "user",
       id: user.id,
-      detail: `Sign-in attempt for ${email}`,
+      detail: `Sign-in attempt for ${user.email}`,
       result: "failed",
       reason: lock ? "Wrong password — account now locked" : "Wrong password",
     });
@@ -288,6 +290,7 @@ export async function usePasswordReset(_prev: FormState, formData: FormData): Pr
   const reset = await db.passwordReset.findUnique({ where: { code } });
   if (!reset || reset.usedAt || reset.expiresAt.getTime() < Date.now()) {
     await audit(reset?.userId ?? null, "password.reset.failed", {
+      result: "failed",
       type: "user",
       id: reset?.userId,
       detail: !reset
