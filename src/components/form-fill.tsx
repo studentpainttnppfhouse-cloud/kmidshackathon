@@ -18,6 +18,8 @@ import type { FormState } from "@/lib/actions/auth";
 
 const initial: FormState = {};
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 export type StoredFile = { id: string; name: string; mimeType: string; size: number };
 
 /**
@@ -33,6 +35,8 @@ export function FormFill({
   existing,
   existingFiles = {},
   maxBytes,
+  askEmail = false,
+  lockedEmail = null,
 }: {
   formId: string;
   title: string;
@@ -41,8 +45,16 @@ export function FormFill({
   existing: ResponsePayload | null;
   existingFiles?: Record<string, StoredFile[]>;
   maxBytes: number;
+  /** Public forms: the respondent's email comes first, before any question. */
+  askEmail?: boolean;
+  /** A signed-in member's address, shown and not editable. */
+  lockedEmail?: string | null;
 }) {
   const [state, action] = useActionState(submitFormResponse, initial);
+  const [email, setEmail] = useState(lockedEmail ?? "");
+  const [emailConfirmed, setEmailConfirmed] = useState(Boolean(lockedEmail) || !askEmail);
+  const [emailError, setEmailError] = useState("");
+  const [renderedAt] = useState(() => String(Date.now()));
   const [editing, setEditing] = useState(false);
   const [version, setVersion] = useState(0);
 
@@ -80,6 +92,46 @@ export function FormFill({
               Edit my answers
             </button>
           </div>
+        ) : !emailConfirmed ? (
+          <form
+            className="mt-6 space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = email.trim();
+              if (!EMAIL_PATTERN.test(value)) {
+                setEmailError("Enter a valid email address.");
+                return;
+              }
+              setEmail(value);
+              setEmailError("");
+              setEmailConfirmed(true);
+            }}
+          >
+            <div>
+              <label htmlFor="respondent-email" className="block text-sm font-semibold text-ink">
+                Your email <span className="text-danger-strong" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="respondent-email"
+                type="email"
+                autoComplete="email"
+                required
+                maxLength={254}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="hs-input mt-2.5"
+                aria-invalid={emailError ? true : undefined}
+              />
+              {emailError ? (
+                <p role="alert" className="mt-1.5 text-xs text-danger-strong">
+                  {emailError}
+                </p>
+              ) : null}
+            </div>
+            <button type="submit" className="hs-btn hs-btn-primary">
+              Continue
+            </button>
+          </form>
         ) : (
           <form
             key={version}
@@ -88,6 +140,33 @@ export function FormFill({
             className="mt-6 space-y-6"
           >
             <input type="hidden" name="formId" value={formId} />
+            <input type="hidden" name="form_rendered_at" value={renderedAt} />
+            {/* Honeypot: hidden from people, irresistible to scripts. */}
+            <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+              <label>
+                Company website
+                <input type="text" name="company_website" tabIndex={-1} autoComplete="off" defaultValue="" />
+              </label>
+            </div>
+
+            {askEmail || lockedEmail ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                <span className="text-muted">
+                  Answering as <span className="font-semibold text-ink">{email}</span>
+                  {lockedEmail ? <span className="ml-1 text-xs text-faint">(signed in)</span> : null}
+                </span>
+                {!lockedEmail ? (
+                  <button
+                    type="button"
+                    onClick={() => setEmailConfirmed(false)}
+                    className="text-xs font-semibold text-brand-deep"
+                  >
+                    Change
+                  </button>
+                ) : null}
+                <input type="hidden" name="respondentEmail" value={email} />
+              </div>
+            ) : null}
 
             {existing ? (
               <p className="hs-feedback hs-feedback-ok" role="status">

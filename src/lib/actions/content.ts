@@ -18,7 +18,6 @@ import {
   safeFileName,
   safeMimeType,
 } from "@/lib/attachments";
-import { notifyAnnouncement } from "@/lib/teams/notify";
 import type { FormState } from "@/lib/actions/auth";
 import type { DocStatus } from "@prisma/client";
 
@@ -588,20 +587,6 @@ export async function createAnnouncement(_prev: FormState, formData: FormData): 
 
   await audit(viewer.id, "announcement.created", { type: "announcement", id: created.id });
 
-  // Queued after the announcement is safely written, never before: the portal
-  // is the record and Teams is the courtesy. `notifyAnnouncement` swallows its
-  // own failures for the same reason — a Microsoft outage must not turn a
-  // posted announcement into a form error.
-  await notifyAnnouncement({
-    announcementId: created.id,
-    title: d.title,
-    body: d.body,
-    departmentId,
-    authorId: viewer.id,
-    authorName: viewer.nickname ?? viewer.name,
-    pinned: Boolean(d.pinned),
-    force: true,
-  });
 
   revalidatePath("/announcements");
   revalidatePath("/dashboard");

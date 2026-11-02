@@ -57,6 +57,7 @@ export function FormBuilder({
   const [cover, setCover] = useState(form?.definition?.cover ?? "");
   const [submitLabel, setSubmitLabel] = useState(form?.definition?.submitLabel ?? "");
   const [confirmation, setConfirmation] = useState(form?.definition?.confirmation ?? "");
+  const [access, setAccess] = useState<"staff" | "public">(form?.definition?.access ?? "staff");
   const [questions, setQuestions] = useState<Question[]>(
     form?.definition?.questions ?? [blank("short_text", 0)],
   );
@@ -136,6 +137,7 @@ export function FormBuilder({
     cover,
     submitLabel: submitLabel.trim(),
     confirmation: confirmation.trim(),
+    access,
     questions: questions.map((q) => ({
       ...q,
       label: q.label.trim(),
@@ -399,6 +401,31 @@ export function FormBuilder({
                 className="hs-input"
               />
             </div>
+            <fieldset>
+              <legend className="hs-label">Who can answer</legend>
+              <div className="space-y-1.5">
+                {(
+                  [
+                    ["staff", "Staff only"],
+                    ["public", "Anyone with the link"],
+                  ] as const
+                ).map(([value, text]) => (
+                  <label key={value} className="flex items-center gap-2 text-sm text-muted">
+                    <input
+                      type="radio"
+                      name="access-choice"
+                      checked={access === value}
+                      onChange={() => setAccess(value)}
+                      className="accent-pink-500"
+                    />
+                    {text}
+                  </label>
+                ))}
+              </div>
+              {access === "public" ? (
+                <p className="mt-1 text-xs text-faint">No account needed. Respondents give their email first.</p>
+              ) : null}
+            </fieldset>
             <label className="flex items-center gap-2 text-sm text-muted">
               <input
                 type="checkbox"

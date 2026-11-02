@@ -167,6 +167,8 @@ export const formDefinitionSchema = z.object({
   cover: coverSchema.optional().or(z.literal("")),
   submitLabel: z.string().trim().max(40).optional().or(z.literal("")),
   confirmation: z.string().trim().max(1000).optional().or(z.literal("")),
+  /** "staff": signed-in portal members only. "public": anyone with the link. */
+  access: z.enum(["staff", "public"]).optional(),
 });
 
 export type FormDefinition = z.infer<typeof formDefinitionSchema>;
@@ -387,4 +389,23 @@ export function answerText(payload: ResponsePayload, question: Question): string
 /** A short, stable id for a new question. */
 export function questionId(index: number): string {
   return `q${index + 1}${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Whether anybody with the link may answer, without a portal account. */
+export function isPublicForm(definition: FormDefinition | null): boolean {
+  return definition?.access === "public";
+}
+
+const respondentEmailSchema = z.string().trim().toLowerCase().max(254).email();
+
+/** The address a respondent gives before answering, or null if it is not one. */
+export function parseRespondentEmail(raw: unknown): string | null {
+  const parsed = respondentEmailSchema.safeParse(typeof raw === "string" ? raw : "");
+  return parsed.success ? parsed.data : null;
+}
+
+/** One CSV cell, quoted, with spreadsheet formula injection neutralised. */
+export function csvCell(value: string): string {
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${safe.replace(/"/g, '""')}"`;
 }

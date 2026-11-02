@@ -391,6 +391,8 @@ model FormResponse {
   id          String   @id @default(cuid())
   formId      String
   userId      String?
+  /// The address the respondent gave (or the signed-in member's own).
+  respondentEmail String? @db.VarChar(254)
   payload     Json
   submittedAt DateTime @default(now())
 
@@ -399,6 +401,7 @@ model FormResponse {
 
   @@index([formId])
   @@index([userId])
+  @@index([formId, respondentEmail])
   @@map("form_responses")
 }
 

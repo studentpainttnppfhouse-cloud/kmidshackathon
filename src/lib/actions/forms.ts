@@ -6,13 +6,17 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { assertCan, can, requireViewer } from "@/lib/authorize";
+import { getViewer } from "@/lib/session";
+import { clientIp, looksAutomated } from "@/lib/request";
 import { RULES, rateLimit, retryMessage } from "@/lib/rate-limit";
 import { createHash } from "node:crypto";
 import {
   checkDefinition,
   formDefinitionSchema,
+  isPublicForm,
   isUpload,
   parseDefinition,
+  parseRespondentEmail,
   validateResponse,
   type FormDefinition,
   type ResponsePayload,
@@ -223,21 +227,38 @@ export async function setFormOpen(id: string, open: boolean): Promise<void> {
 // Answering
 // ---------------------------------------------------------------------------
 
+/** Anonymous answers are throttled per address, more tightly than members. */
+const PUBLIC_SUBMIT_RULE = { limit: 10, windowMs: 10 * 60 * 1000, blockMs: 15 * 60 * 1000 };
+
 export async function submitFormResponse(_prev: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await requireViewer();
+  const viewer = await getViewer();
   const formId = String(formData.get("formId") ?? "");
+  const actor = viewer?.id ?? null;
 
   const refuse = async (error: string, reason: string) => {
-    await audit(viewer.id, "form.response.rejected", {
+    await audit(actor, "form.response.rejected", {
       type: "form",
       id: formId || undefined,
-      detail: `Response refused: ${reason}`,
+      detail: `Response refused${viewer ? "" : " (public link)"}: ${reason}`,
     });
     return { error };
   };
 
-  const limit = rateLimit(`form:${viewer.id}`, RULES.write);
-  if (!limit.ok) return refuse(retryMessage(limit.retryAfter), "rate limited");
+  const ip = await clientIp();
+  const limit = viewer
+    ? rateLimit(`form:${viewer.id}`, RULES.write)
+    : rateLimit(`form-public:${ip}`, PUBLIC_SUBMIT_RULE);
+  if (!limit.ok) return refuse(retryMessage(limit.retryAfter), `rate limited (${viewer ? "member" : ip})`);
+
+  // Honeypot and fill-time: a script gets a polite "thanks" and nothing stored.
+  if (looksAutomated(formData)) {
+    await audit(actor, "form.response.rejected", {
+      type: "form",
+      id: formId || undefined,
+      detail: `Response dropped: looked automated (honeypot or too fast) from ${ip}`,
+    });
+    return { ok: "Your answers are in." };
+  }
 
   const form = await db.form.findUnique({
     where: { id: formId },
@@ -257,24 +278,39 @@ export async function submitFormResponse(_prev: FormState, formData: FormData): 
   if (!form || form.deletedAt || form.type !== "internal") {
     return refuse("That form is not available.", "form missing or not a portal form");
   }
-  // "comment" rather than "read": answering a form is the one write a tier held
-  // below Full on this page is still meant to be able to do.
-  if (!can(viewer, "comment", { kind: "form", departmentId: form.departmentId, ownerId: form.ownerId })) {
-    return refuse("That form is not available.", `no permission to answer "${form.title}"`);
+
+  const definition = parseDefinition(form.schema);
+  const isPublic = isPublicForm(definition);
+
+  if (!isPublic) {
+    if (!viewer) return refuse("Sign in to answer this form.", `"${form.title}" is staff only`);
+    // "comment" rather than "read": answering a form is the one write a tier held
+    // below Full on this page is still meant to be able to do.
+    if (!can(viewer, "comment", { kind: "form", departmentId: form.departmentId, ownerId: form.ownerId })) {
+      return refuse("That form is not available.", `no permission to answer "${form.title}"`);
+    }
   }
   if (!form.isOpen) return refuse("This form is closed.", `"${form.title}" is closed`);
   if (form.deadline && form.deadline.getTime() < Date.now()) {
     return refuse("The deadline for this form has passed.", `"${form.title}" is past its deadline`);
   }
-
-  const definition = parseDefinition(form.schema);
   if (!definition) return refuse("This form has no questions yet.", `"${form.title}" has no valid questions`);
 
-  // One response per person, replaced on re-submit.
-  const existing = await db.formResponse.findFirst({
-    where: { formId: form.id, userId: viewer.id },
-    select: { id: true, payload: true },
-  });
+  // A signed-in member's address is their own and cannot be typed over.
+  const respondentEmail = viewer
+    ? viewer.email.toLowerCase()
+    : parseRespondentEmail(formData.get("respondentEmail"));
+  if (!respondentEmail) return refuse("Enter a valid email address.", `"${form.title}": no valid email`);
+
+  // Members have one response, replaced on re-submit. Anonymous answers are
+  // always new rows: an email typed into a public form proves nothing, so it
+  // must never let somebody overwrite another person's answers.
+  const existing = viewer
+    ? await db.formResponse.findFirst({
+        where: { formId: form.id, userId: viewer.id },
+        select: { id: true, payload: true },
+      })
+    : null;
   const previous = (existing?.payload ?? null) as ResponsePayload | null;
 
   // The definition decides what a valid answer is, never the posted body.
@@ -287,16 +323,18 @@ export async function submitFormResponse(_prev: FormState, formData: FormData): 
   const response = existing
     ? await db.formResponse.update({
         where: { id: existing.id },
-        data: { payload: validated.payload, submittedAt: new Date() },
+        data: { payload: validated.payload, respondentEmail, submittedAt: new Date() },
         select: { id: true },
       })
     : await db.formResponse.create({
-        data: { formId: form.id, userId: viewer.id, payload: validated.payload },
+        data: { formId: form.id, userId: viewer?.id ?? null, respondentEmail, payload: validated.payload },
         select: { id: true },
       });
 
   // Files go into the attachments store under the response, so downloads use
-  // the same permission check as every other attachment.
+  // the same permission check as every other attachment. Anonymous files are
+  // recorded against the form's owner, who is answerable for what it collects.
+  const uploader = viewer?.id ?? form.ownerId;
   const payload: ResponsePayload = { ...validated.payload };
   let stored = 0;
   for (const question of definition.questions) {
@@ -311,7 +349,7 @@ export async function submitFormResponse(_prev: FormState, formData: FormData): 
 
     const ids: string[] = [];
     for (const file of picked) {
-      ids.push(await storeFile(file, response.id, form.departmentId, viewer.id));
+      ids.push(await storeFile(file, response.id, form.departmentId, uploader, actor));
       stored += 1;
     }
     payload[question.id] = ids;
@@ -320,10 +358,10 @@ export async function submitFormResponse(_prev: FormState, formData: FormData): 
     await db.formResponse.update({ where: { id: response.id }, data: { payload } });
   }
 
-  await audit(viewer.id, existing ? "form.response.updated" : "form.response.submitted", {
+  await audit(actor, existing ? "form.response.updated" : "form.response.submitted", {
     type: "form",
     id: form.id,
-    detail: `${existing ? "Updated answers to" : "Answered"} "${form.title}"${stored ? ` with ${stored} file${stored === 1 ? "" : "s"}` : ""}`,
+    detail: `${existing ? "Updated answers to" : "Answered"} "${form.title}" as ${respondentEmail}${viewer ? "" : " (public link)"}${stored ? ` with ${stored} file${stored === 1 ? "" : "s"}` : ""}`,
   });
   revalidatePath(`/forms/${form.id}`);
   revalidatePath(`/forms/${form.id}/responses`);
@@ -337,6 +375,7 @@ async function storeFile(
   responseId: string,
   departmentId: string | null,
   userId: string,
+  actor: string | null,
 ): Promise<string> {
   const bytes = Buffer.from(await file.arrayBuffer());
   const name = safeFileName(file.name);
@@ -363,7 +402,7 @@ async function storeFile(
       },
     });
   }
-  await audit(userId, "attachment.uploaded", {
+  await audit(actor, "attachment.uploaded", {
     type: "form_response",
     id: responseId,
     detail: `Form answer file ${name} (${formatBytes(bytes.byteLength)})`,
