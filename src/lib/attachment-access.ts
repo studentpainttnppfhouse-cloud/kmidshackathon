@@ -1,4 +1,5 @@
 import "server-only";
+import { readDrive, canEditDrive } from "./workspace-access";
 import { db } from "@/lib/db";
 import { can, type Viewer } from "@/lib/policy";
 import { canRenderInline, isParentType, type ParentType } from "@/lib/attachments";
@@ -64,6 +65,13 @@ export async function resolveParent(
   if (!parentId || parentId.length > 40) return DENIED(parentType, parentId);
 
   switch (parentType) {
+    case "drive": {
+      const row = await db.driveItem.findUnique({ where: { id: parentId } });
+      if (!row || row.deletedAt) return DENIED(parentType, parentId);
+      return { parentType, parentId, departmentId: row.departmentId,
+        canRead: await readDrive(viewer, row), canWrite: canEditDrive(viewer, row),
+        path: `/drive/${parentId}`, label: "this drive item" };
+    }
     case "assignment": {
       const row = await db.assignment.findUnique({
         where: { id: parentId },

@@ -1,5 +1,6 @@
 "use server";
 
+import { canAssignPerson } from "@/lib/workspace-policy";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -21,7 +22,12 @@ const STATUSES = [
   "DONE",
 ] as const satisfies readonly AssignmentStatus[];
 
-const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const satisfies readonly Priority[];
+const PRIORITIES = [
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "URGENT",
+] as const satisfies readonly Priority[];
 
 const assignmentSchema = z.object({
   title: z.string().trim().min(2, "Give the task a title.").max(200),
@@ -69,6 +75,14 @@ async function validAssigneeIds(ids: string[]): Promise<string[] | null> {
   return found.length === unique.length ? unique : null;
 }
 
+async function validateNewAssignees(viewer: Viewer, ids: string[]) {
+  const people = await db.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, tier: true, departmentId: true },
+  });
+  return people.every((p) => canAssignPerson(viewer, p));
+}
+
 async function departmentExists(departmentId: string): Promise<boolean> {
   const found = await db.department.findUnique({
     where: { id: departmentId },
@@ -96,7 +110,10 @@ async function assignmentResource(id: string): Promise<Resource | null> {
   };
 }
 
-export async function createAssignment(_prev: FormState, formData: FormData): Promise<FormState> {
+export async function createAssignment(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const viewer = await requireViewer();
   const throttled = writeLimit(viewer);
   if (throttled) return throttled;
@@ -119,7 +136,10 @@ export async function createAssignment(_prev: FormState, formData: FormData): Pr
     formData.getAll("assigneeIds").map(String).filter(Boolean),
   );
   if (assigneeIds === null) {
-    return { error: "One of the people picked is no longer on the team. Reload and try again." };
+    return {
+      error:
+        "One of the people picked is no longer on the team. Reload and try again.",
+    };
   }
 
   if (!(await departmentExists(d.departmentId))) {
@@ -132,6 +152,11 @@ export async function createAssignment(_prev: FormState, formData: FormData): Pr
     createdById: viewer.id,
     ownerIds: assigneeIds,
   });
+
+  if (!(await validateNewAssignees(viewer, assigneeIds)))
+    return {
+      error: "Assign yourself or lower-tier people in your permitted team.",
+    };
 
   // Assigning work to somebody else is a Head/Admin action, not a Member one.
   if (assigneeIds.some((id) => id !== viewer.id)) {
@@ -168,7 +193,11 @@ export async function createAssignment(_prev: FormState, formData: FormData): Pr
     },
   });
 
-  await audit(viewer.id, "assignment.created", { type: "assignment", id: created.id, detail: d.title });
+  await audit(viewer.id, "assignment.created", {
+    type: "assignment",
+    id: created.id,
+    detail: d.title,
+  });
 
   // Told about after it exists. Whether anything is actually sent is the
   // department's ASSIGNMENT_NEW rule's decision, not this action's.
@@ -184,11 +213,15 @@ export async function createAssignment(_prev: FormState, formData: FormData): Pr
   });
 
   revalidatePath("/assignments");
+  revalidatePath("/calendar");
   revalidatePath("/dashboard");
   redirect(`/assignments/${created.id}`);
 }
 
-export async function updateAssignment(_prev: FormState, formData: FormData): Promise<FormState> {
+export async function updateAssignment(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const viewer = await requireViewer();
   const throttled = writeLimit(viewer);
   if (throttled) return throttled;
@@ -217,7 +250,10 @@ export async function updateAssignment(_prev: FormState, formData: FormData): Pr
   // edit in the source. Checking only "update" would let anyone who owns a task
   // push it into a department they have no write access to — the form posts
   // departmentId, and the browser decides what that value is.
-  if (resource.kind === "assignment" && d.departmentId !== resource.departmentId) {
+  if (
+    resource.kind === "assignment" &&
+    d.departmentId !== resource.departmentId
+  ) {
     if (!(await departmentExists(d.departmentId))) {
       return { error: "That department no longer exists." };
     }
@@ -233,13 +269,28 @@ export async function updateAssignment(_prev: FormState, formData: FormData): Pr
     formData.getAll("assigneeIds").map(String).filter(Boolean),
   );
   if (assigneeIds === null) {
-    return { error: "One of the people picked is no longer on the team. Reload and try again." };
+    return {
+      error:
+        "One of the people picked is no longer on the team. Reload and try again.",
+    };
   }
 
   const current = resource.kind === "assignment" ? resource.ownerIds : [];
   const changed =
-    assigneeIds.length !== current.length || assigneeIds.some((x) => !current.includes(x));
-  if (changed) assertCan(viewer, "assign", resource);
+    assigneeIds.length !== current.length ||
+    assigneeIds.some((x) => !current.includes(x));
+  if (changed) {
+    assertCan(viewer, "assign", resource);
+    if (
+      !(await validateNewAssignees(
+        viewer,
+        assigneeIds.filter((id) => !current.includes(id)),
+      ))
+    )
+      return {
+        error: "Assign yourself or lower-tier people in your permitted team.",
+      };
+  }
 
   // Approving is a distinct permission from editing — a member moving their own
   // task must not be able to mark it approved.
@@ -266,7 +317,12 @@ export async function updateAssignment(_prev: FormState, formData: FormData): Pr
       approvedById: approving ? viewer.id : null,
       approvedAt: approving ? new Date() : null,
       ...(changed
-        ? { assignees: { deleteMany: {}, create: assigneeIds.map((userId) => ({ userId })) } }
+        ? {
+            assignees: {
+              deleteMany: {},
+              create: assigneeIds.map((userId) => ({ userId })),
+            },
+          }
         : {}),
     },
   });
@@ -274,13 +330,17 @@ export async function updateAssignment(_prev: FormState, formData: FormData): Pr
   await audit(viewer.id, "assignment.updated", { type: "assignment", id });
 
   revalidatePath("/assignments");
+  revalidatePath("/calendar");
   revalidatePath(`/assignments/${id}`);
   revalidatePath("/dashboard");
   return { ok: "Saved." };
 }
 
 /** Board drag-and-drop and the quick status buttons both land here. */
-export async function setAssignmentStatus(id: string, status: AssignmentStatus): Promise<void> {
+export async function setAssignmentStatus(
+  id: string,
+  status: AssignmentStatus,
+): Promise<void> {
   const viewer = await requireViewer();
   // A server action is a public HTTP endpoint: its arguments are as
   // browser-supplied as any form body, TypeScript types notwithstanding.
@@ -298,8 +358,10 @@ export async function setAssignmentStatus(id: string, status: AssignmentStatus):
     where: { id },
     data: {
       status,
-      approvedById: status === "APPROVED" || status === "DONE" ? viewer.id : null,
-      approvedAt: status === "APPROVED" || status === "DONE" ? new Date() : null,
+      approvedById:
+        status === "APPROVED" || status === "DONE" ? viewer.id : null,
+      approvedAt:
+        status === "APPROVED" || status === "DONE" ? new Date() : null,
     },
   });
 
@@ -309,6 +371,7 @@ export async function setAssignmentStatus(id: string, status: AssignmentStatus):
   });
 
   revalidatePath("/assignments");
+  revalidatePath("/calendar");
   revalidatePath(`/assignments/${id}`);
   revalidatePath("/dashboard");
 }
@@ -321,10 +384,14 @@ export async function deleteAssignment(id: string): Promise<void> {
 
   assertCan(viewer, "delete", resource);
 
-  await db.assignment.update({ where: { id }, data: { deletedAt: new Date() } });
+  await db.assignment.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
   await audit(viewer.id, "assignment.deleted", { type: "assignment", id });
 
   revalidatePath("/assignments");
+  revalidatePath("/calendar");
   revalidatePath("/dashboard");
 }
 
@@ -332,7 +399,11 @@ export async function restoreAssignment(id: string): Promise<void> {
   const viewer = await requireViewer();
   const a = await db.assignment.findUnique({
     where: { id },
-    select: { departmentId: true, createdById: true, assignees: { select: { userId: true } } },
+    select: {
+      departmentId: true,
+      createdById: true,
+      assignees: { select: { userId: true } },
+    },
   });
   if (!a) return;
 
@@ -346,6 +417,7 @@ export async function restoreAssignment(id: string): Promise<void> {
   await db.assignment.update({ where: { id }, data: { deletedAt: null } });
   await audit(viewer.id, "assignment.restored", { type: "assignment", id });
   revalidatePath("/assignments");
+  revalidatePath("/calendar");
 }
 
 // ---------------------------------------------------------------------------
@@ -361,7 +433,11 @@ async function canSeeCommentThread(
   if (parentType === "assignment") {
     const found = await db.assignment.findFirst({
       where: { id: parentId, deletedAt: null },
-      select: { departmentId: true, createdById: true, assignees: { select: { userId: true } } },
+      select: {
+        departmentId: true,
+        createdById: true,
+        assignees: { select: { userId: true } },
+      },
     });
     if (!found) return false;
     return can(viewer, "read", {
@@ -382,7 +458,10 @@ async function canSeeCommentThread(
   }
 
   if (parentType === "incident") {
-    const found = await db.incident.findUnique({ where: { id: parentId }, select: { id: true } });
+    const found = await db.incident.findUnique({
+      where: { id: parentId },
+      select: { id: true },
+    });
     if (!found) return false;
     return can(viewer, "read", { kind: "incident" });
   }
@@ -390,7 +469,10 @@ async function canSeeCommentThread(
   return false;
 }
 
-export async function addComment(_prev: FormState, formData: FormData): Promise<FormState> {
+export async function addComment(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const viewer = await requireViewer();
   const parentType = String(formData.get("parentType") ?? "");
   const parentId = String(formData.get("parentId") ?? "");
