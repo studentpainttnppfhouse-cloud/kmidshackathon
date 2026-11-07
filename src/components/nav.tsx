@@ -11,11 +11,11 @@ import type { Tier } from "@prisma/client";
 export type NavItem = { href: string; label: string; badge?: number };
 
 const groups = [
-  { label: "Workspace", paths: ["/dashboard", "/announcements", "/my-tasks", "/assignments", "/calendar", "/departments", "/people", "/assistant"] },
-  { label: "Shared resources", paths: ["/documents", "/brand", "/forms"] },
+  { label: "Workspace", paths: ["/dashboard", "/announcements", "/my-tasks", "/assignments", "/calendar", "/meetings", "/departments", "/people", "/assistant"] },
+  { label: "Shared resources", paths: ["/drive", "/brand", "/forms"] },
   { label: "Manage", paths: ["/admin", "/admin/audit"] },
 ];
-const dailyPaths = ["/dashboard", "/my-tasks", "/calendar", "/departments"];
+const dailyPaths = ["/dashboard", "/my-tasks", "/calendar", "/meetings", "/departments"];
 const shortLabels: Record<string, string> = {
   "/dashboard": "Home", "/my-tasks": "Tasks", "/calendar": "Calendar", "/departments": "Teams",
 };

@@ -1,4 +1,5 @@
 "use client";
+import { DrivePicker } from "./workspace-forms";
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -77,7 +78,9 @@ export function Attachments({
         <h2 className="hs-h2">
           {title}
           {attachments.length > 0 ? (
-            <span className="ml-2 text-sm font-normal text-faint">{attachments.length}</span>
+            <span className="ml-2 text-sm font-normal text-faint">
+              {attachments.length}
+            </span>
           ) : null}
         </h2>
         {hint ? <p className="text-xs text-faint">{hint}</p> : null}
@@ -90,7 +93,16 @@ export function Attachments({
       />
 
       {canWrite ? (
-        <AttachmentUploader parentType={parentType} parentId={parentId} maxBytes={maxBytes} />
+        <>
+          <AttachmentUploader
+            parentType={parentType}
+            parentId={parentId}
+            maxBytes={maxBytes}
+          />
+          {parentType === "assignment" ? (
+            <DrivePicker assignmentId={parentId} />
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -122,7 +134,13 @@ export function AttachmentList({
   );
 }
 
-function AttachmentRow({ file, canRemove }: { file: AttachmentItem; canRemove: boolean }) {
+function AttachmentRow({
+  file,
+  canRemove,
+}: {
+  file: AttachmentItem;
+  canRemove: boolean;
+}) {
   const router = useRouter();
   const [removing, setRemoving] = useState(false);
   const linked = file.storage === "link";
@@ -136,7 +154,11 @@ function AttachmentRow({ file, canRemove }: { file: AttachmentItem; canRemove: b
 
       <div className="min-w-0 flex-1">
         <a
-          href={linked || !canRenderInline(file.mimeType) ? href : `${href}?inline=1`}
+          href={
+            linked || !canRenderInline(file.mimeType)
+              ? href
+              : `${href}?inline=1`
+          }
           // A link attachment leaves the portal; a stored one does not, so
           // only the first needs the new tab and the noreferrer.
           {...(linked ? { target: "_blank", rel: "noreferrer noopener" } : {})}
@@ -190,7 +212,10 @@ function AttachmentUploader({
   const router = useRouter();
   const [state, action] = useActionState(uploadAttachments, initialUpload);
   const formRef = useRef<HTMLFormElement>(null);
-  const [oversize, setOversize] = useState<{ name: string; size: number } | null>(null);
+  const [oversize, setOversize] = useState<{
+    name: string;
+    size: number;
+  } | null>(null);
 
   useEffect(() => {
     if (state.uploaded) {
@@ -234,19 +259,28 @@ function AttachmentUploader({
         />
 
         <p className="text-xs text-faint">
-          Up to {MAX_FILES_PER_UPLOAD} files, {formatBytes(maxBytes)} each. They save straight into the
-          portal — every device that signs in sees them, and a redeploy does not touch them.
+          Up to {MAX_FILES_PER_UPLOAD} files, {formatBytes(maxBytes)} each. They
+          save straight into the portal and are available to people who can read
+          this item.
         </p>
 
         <Feedback state={state} />
 
         {/* Auto-submit covers the ordinary case; this covers no-JavaScript. */}
-        <SubmitButton className="hs-btn hs-btn-secondary" pendingLabel="Saving…">
+        <SubmitButton
+          className="hs-btn hs-btn-secondary"
+          pendingLabel="Saving…"
+        >
           Upload
         </SubmitButton>
       </form>
 
-      {oversize ? (
+      {oversize && parentType === "drive" ? (
+        <p role="alert" className="text-sm text-muted">
+          This file exceeds {formatBytes(maxBytes)}. Compress or split it before
+          uploading.
+        </p>
+      ) : oversize ? (
         <OversizePanel
           parentType={parentType}
           parentId={parentId}
@@ -294,8 +328,9 @@ function OversizePanel({
         {file.name} is {formatBytes(file.size)}
       </p>
       <p className="mt-1 text-xs text-muted">
-        Over the {formatBytes(maxBytes)} limit, so the bytes stay where they are. Put it in Drive and
-        paste the link — the file still shows up here, with its name and who added it.
+        Over the {formatBytes(maxBytes)} limit, so the bytes stay where they
+        are. Put it in Drive and paste the link — the file still shows up here,
+        with its name and who added it.
       </p>
 
       <form action={action} className="mt-3 space-y-2">
@@ -329,7 +364,10 @@ function OversizePanel({
         <Feedback state={state} />
 
         <div className="flex flex-wrap gap-2">
-          <SubmitButton className="hs-btn hs-btn-secondary px-3 py-1.5 text-xs" pendingLabel="Adding…">
+          <SubmitButton
+            className="hs-btn hs-btn-secondary px-3 py-1.5 text-xs"
+            pendingLabel="Adding…"
+          >
             Add it as a link
           </SubmitButton>
           <button

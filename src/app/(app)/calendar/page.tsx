@@ -1,60 +1,83 @@
+import { CalendarImport } from "@/components/calendar-import";
 import Link from "next/link";
-import type { Metadata } from "next";
-import { requireViewer } from "@/lib/authorize";
+import { requirePageAccess, canEditPage, atLeast } from "@/lib/authorize";
 import { PageHeader } from "@/components/ui";
-import { AssignmentFilters } from "@/components/assignment-filters";
-import { CalendarView } from "../assignments/views";
+import {
+  WorkspaceCalendar,
+  type CalendarCard,
+} from "@/components/workspace-calendar";
+import { db } from "@/lib/db";
 import { loadTasks } from "../assignments/query";
-
-export const metadata: Metadata = { title: "Calendar" };
+import { bangkokDay, canReadEntry, ids } from "@/lib/workspace-policy";
 export const dynamic = "force-dynamic";
-
-function monthKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-export default async function CalendarPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ dept?: string; status?: string; month?: string }>;
-}) {
-  const viewer = await requireViewer();
-  const sp = await searchParams;
-  const { tasks, departments } = await loadTasks(viewer, { dept: sp.dept, status: sp.status });
-
-  const parsed = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? new Date(`${sp.month}-01T00:00:00+07:00`) : null;
-  const month = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
-  const prev = new Date(month.getFullYear(), month.getMonth() - 1, 1);
-  const next = new Date(month.getFullYear(), month.getMonth() + 1, 1);
-
-  const link = (m: Date) => {
-    const params = new URLSearchParams();
-    params.set("month", monthKey(m));
-    if (sp.dept) params.set("dept", sp.dept);
-    if (sp.status) params.set("status", sp.status);
-    return `/calendar?${params}`;
-  };
-
+export default async function CalendarPage() {
+  const v = await requirePageAccess("calendar");
+  const [{ tasks }, events] = await Promise.all([
+    loadTasks(v, {}),
+    db.calendarEntry.findMany({
+      where: { deletedAt: null, kind: { not: "meeting" } },
+      orderBy: { startsAt: "asc" },
+    }),
+  ]);
+  const teams = await db.department.findMany({
+    select: { id: true, name: true },
+  });
+  const names = new Map(teams.map((t) => [t.id, t.name]));
+  const items: CalendarCard[] = tasks
+    .filter((t) => t.dueDate)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      date: bangkokDay(t.dueDate!),
+      time: "",
+      href: `/assignments/${t.id}`,
+      kind: "task",
+      mine: t.assignees.some((x) => x.user.id === v.id),
+      team: t.department.name,
+    }));
+  for (const e of events.filter((e) => canReadEntry(v, e)))
+    items.push({
+      id: e.id,
+      title: e.title,
+      date: bangkokDay(e.startsAt),
+      time: new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Bangkok",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(e.startsAt),
+      href: `/calendar/${e.id}`,
+      kind: e.kind,
+      mine: e.ownerId === v.id || ids(e.attendeeIds).includes(v.id),
+      team: names.get(e.departmentId ?? "") ?? "",
+    });
   return (
     <div className="hs-enter space-y-4">
       <PageHeader
         eyebrow="Workspace"
         title="Calendar"
         action={
-          <div className="flex gap-1.5">
-            <Link href={link(prev)} className="hs-btn hs-btn-secondary" aria-label="Previous month">←</Link>
-            <Link href="/calendar" className="hs-btn hs-btn-secondary">Today</Link>
-            <Link href={link(next)} className="hs-btn hs-btn-secondary" aria-label="Next month">→</Link>
+          <div className="flex gap-2">
+            <Link href="/meetings" className="hs-btn hs-btn-secondary">
+              Meetings
+            </Link>
+            {canEditPage(v, "calendar") ? (
+              <Link href="/calendar/new" className="hs-btn hs-btn-primary">
+                New event
+              </Link>
+            ) : null}
           </div>
         }
       />
-      <AssignmentFilters
-        departments={departments}
-        dept={sp.dept}
-        status={sp.status}
-        keep={{ month: sp.month }}
+      <WorkspaceCalendar
+        items={items}
+        today={bangkokDay(new Date())}
+        canCreate={
+          canEditPage(v, "calendar") && !v.isAlumni && v.tier !== "T0_ADVISOR"
+        }
       />
-      <CalendarView items={tasks} month={month} />
+      {atLeast(v, "T3_ADMIN") && canEditPage(v, "calendar") ? (
+        <CalendarImport />
+      ) : null}
     </div>
   );
 }

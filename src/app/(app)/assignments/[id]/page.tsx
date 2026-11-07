@@ -1,3 +1,4 @@
+import { readDrive } from "@/lib/workspace-access";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -9,14 +10,25 @@ import { AssignmentForm } from "@/components/assignment-form";
 import { Attachments } from "@/components/attachments";
 import { CommentForm } from "@/components/comments";
 import { StatusButtons } from "@/components/status-buttons";
-import { Avatar, Banner, Card, PriorityPill, SectionTitle, StatusPill } from "@/components/ui";
+import {
+  Avatar,
+  Banner,
+  Card,
+  PriorityPill,
+  SectionTitle,
+  StatusPill,
+} from "@/components/ui";
 import { listAttachments } from "@/lib/attachment-access";
 import { MAX_UPLOAD_BYTES } from "@/lib/attachments";
 
 export const metadata: Metadata = { title: "Task" };
 export const dynamic = "force-dynamic";
 
-export default async function AssignmentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AssignmentPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const viewer = await requireViewer();
   const { id } = await params;
 
@@ -24,9 +36,15 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     where: { id },
     include: {
       department: true,
-      createdBy: { select: { id: true, name: true, nickname: true, avatarUrl: true } },
+      createdBy: {
+        select: { id: true, name: true, nickname: true, avatarUrl: true },
+      },
       assignees: {
-        select: { user: { select: { id: true, name: true, nickname: true, avatarUrl: true } } },
+        select: {
+          user: {
+            select: { id: true, name: true, nickname: true, avatarUrl: true },
+          },
+        },
       },
     },
   });
@@ -48,7 +66,9 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   const [comments, departments, people, attachments] = await Promise.all([
     db.comment.findMany({
       where: { parentType: "assignment", parentId: a.id, deletedAt: null },
-      include: { user: { select: { name: true, nickname: true, avatarUrl: true } } },
+      include: {
+        user: { select: { name: true, nickname: true, avatarUrl: true } },
+      },
       orderBy: { createdAt: "asc" },
     }),
     db.department.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -67,15 +87,31 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     listAttachments("assignment", a.id),
   ]);
 
+  const submissions = await db.driveSubmission.findMany({
+    where: { assignmentId: a.id },
+  });
+  const submittedItems = await db.driveItem.findMany({
+    where: { id: { in: submissions.map((s) => s.itemId) }, deletedAt: null },
+  });
+  const visibleSubmissions = [];
+  for (const item of submittedItems)
+    if (await readDrive(viewer, item)) visibleSubmissions.push(item);
   const overdue = isOverdue(a.dueDate, a.status);
 
   return (
     <div className="space-y-5">
-      <Link href="/assignments" className="text-sm font-semibold text-brand-deep">
+      <Link
+        href="/assignments"
+        className="text-sm font-semibold text-brand-deep"
+      >
         ← All assignments
       </Link>
 
-      {overdue ? <Banner tone="danger">This task is {relativeDue(a.dueDate).toLowerCase()}.</Banner> : null}
+      {overdue ? (
+        <Banner tone="danger">
+          This task is {relativeDue(a.dueDate).toLowerCase()}.
+        </Banner>
+      ) : null}
 
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -103,7 +139,9 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
           <div>
             <dt className="hs-eyebrow">Due</dt>
-            <dd className={`mt-0.5 font-semibold ${overdue ? "text-danger-strong" : "text-ink"}`}>
+            <dd
+              className={`mt-0.5 font-semibold ${overdue ? "text-danger-strong" : "text-ink"}`}
+            >
               {formatDateLong(a.dueDate)}
             </dd>
           </div>
@@ -163,7 +201,11 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         {mayEdit ? (
           <div className="mt-5 border-t border-line-soft pt-4">
             <p className="hs-eyebrow mb-2">Move this task</p>
-            <StatusButtons id={a.id} current={a.status} canApprove={mayApprove} />
+            <StatusButtons
+              id={a.id}
+              current={a.status}
+              canApprove={mayApprove}
+            />
           </div>
         ) : null}
       </Card>
@@ -185,6 +227,23 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         />
       </Card>
 
+      {visibleSubmissions.length ? (
+        <Card>
+          <SectionTitle>Portal drive submissions</SectionTitle>
+          <ul className="space-y-2">
+            {visibleSubmissions.map((d) => (
+              <li key={d.id}>
+                <Link
+                  className="text-brand-deep underline"
+                  href={`/drive/${d.id}`}
+                >
+                  {d.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
       <Card>
         <SectionTitle>Comments</SectionTitle>
         {comments.length === 0 ? (
@@ -202,9 +261,13 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                 <div className="min-w-0 flex-1 rounded-xl bg-tint/70 px-3 py-2">
                   <p className="text-xs font-semibold text-brand-deep">
                     {c.user.nickname || c.user.name}
-                    <span className="ml-1.5 font-normal text-faint">{timeAgo(c.createdAt)}</span>
+                    <span className="ml-1.5 font-normal text-faint">
+                      {timeAgo(c.createdAt)}
+                    </span>
                   </p>
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{c.body}</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">
+                    {c.body}
+                  </p>
                 </div>
               </li>
             ))}
@@ -250,7 +313,8 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
             Move to recycle bin
           </button>
           <p className="mt-1.5 text-xs text-faint">
-            Nothing is hard-deleted. An owner can restore this from the admin panel.
+            Nothing is hard-deleted. An owner can restore this from the admin
+            panel.
           </p>
         </form>
       ) : null}
